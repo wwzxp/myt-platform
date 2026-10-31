@@ -13,6 +13,7 @@ import { nodeRegistries } from './nodes';
 import { useEditorProps } from './hooks';
 import { WorkflowContext, type WorkflowContextValue } from './context/workflow-context';
 import { loadWorkflow, saveWorkflow } from './services/workflow-api';
+import { WorkflowPicker } from './components/workflow-picker';
 import type { FlowDocumentJSON } from './typings';
 
 /** 从 URL 读当前流程：`?flow=文件名.json`。 */
@@ -119,16 +120,9 @@ export const Editor = () => {
     save,
   );
 
-  // 没有指定流程：不猜测，直接提示
+  // 没有指定流程：列出可选的流程，让用户点进去（不再让人手拼文件名）
   if (!fileName) {
-    return (
-      <div style={{ padding: 24 }}>
-        <p>未选择流程。</p>
-        <p>
-          请从<a href="/workflows">流程列表</a>打开，或访问 <code>/?flow=流程名.json</code>。
-        </p>
-      </div>
-    );
+    return <WorkflowPicker />;
   }
 
   if (loadError) {

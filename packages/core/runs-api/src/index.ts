@@ -13,6 +13,8 @@ import type {} from '@myt/runs'
 import type {} from '@myt/flow'
 import type {} from '@myt/device-adb'
 import { FlowRunner } from '@myt/flow'
+import type {} from '@myt/model'
+import { createModelLocate } from '@myt/ui-decide'
 
 /** 运行接口的配置。 */
 export interface RunsApiConfig {
@@ -27,7 +29,7 @@ export interface RunsApiConfig {
  */
 export class RunsApi extends Service {
   /** 依赖：Web 服务、运行存储、流程注册表、单机控制。 */
-  static inject = ['webServer', 'runs', 'flows', 'deviceControl']
+  static inject = ['webServer', 'runs', 'flows', 'deviceControl', 'modelControl']
 
   private readonly runner: FlowRunner
   private readonly yadbPath: string
@@ -115,6 +117,8 @@ export class RunsApi extends Service {
         { deviceId: deviceId || serial, serial },
         {
           dryRun,
+          // 定位用本机模型：不传就只能走硬编码定位器，意图定位整段失效。
+          model: createModelLocate(this.ctx.modelControl),
           yadbPath: this.yadbPath,
           seed: typeof body['seed'] === 'number' ? body['seed'] : undefined,
           // 登录类流程必须用 yadb：真机上验证过，uiautomator 结构不同。

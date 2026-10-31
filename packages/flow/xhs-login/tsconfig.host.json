@@ -31,6 +31,12 @@
     },
     {
       "path": "../../myt/myt-api-v3/tsconfig.host.json"
+    },
+    {
+      "path": "../../automation/ui-decide/tsconfig.host.json"
+    },
+    {
+      "path": "../../ai/model/tsconfig.host.json"
     }
   ]
 }

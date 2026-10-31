@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { readFile } from 'node:fs/promises'
 import { AdbDeviceControl } from '../../../../device/device-adb/src/index.ts'
-import { loadFlowGraph } from '../../../../automation/automation/src/graph/load.ts'
+import { validateFlowGraph } from '../../../../automation/automation/src/graph/load.ts'
 import { runXhsGraph } from '../../src/graph-runtime.ts'
 
 const ctx=new Context()
@@ -37,7 +37,7 @@ const params:Record<string,string> = name==='发布文字笔记'
 const raw=JSON.parse(await readFile(`F:/ai/myt_tools/data/workflows/${name}.json`,'utf8'))
 // 把 globalVariable 里的 default 提到顶层 data（引擎需要的形态）
 const cfg=raw.globalVariable?.properties
-const graph=await loadFlowGraph({
+const graph=validateFlowGraph({
   ...raw,
   data:{ app: cfg?.app?.default, maxSteps: cfg?.maxSteps?.default },
 })

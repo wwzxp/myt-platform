@@ -12,6 +12,8 @@ import { Service } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@myt/myt-host'
 import type {} from '@myt/myt-api-v3'
+import type {} from '@myt/model'
+import { createModelLocate } from '@myt/ui-decide'
 import type {} from '@myt/devices'
 import type {} from '@myt/runs'
 import { FlowRunner } from '@myt/flow'
@@ -54,7 +56,7 @@ export interface LoginApiConfig {
  */
 export class LoginApi extends Service {
   /** 依赖：Web 服务、宿主 SDK、设备注册表、任务记录。 */
-  static inject = ['webServer', 'mytHost', 'mytHostV3', 'devices', 'runs', 'flows', 'deviceControl', 'xhsPack']
+  static inject = ['webServer', 'mytHost', 'mytHostV3', 'devices', 'runs', 'flows', 'deviceControl', 'xhsPack', 'modelControl']
 
   private readonly sourceStore: SourceStore
   private readonly importConfigStore: ImportConfigStore
@@ -363,7 +365,13 @@ export class LoginApi extends Service {
           const result = await this.runner.run(
             flow,
             { deviceId: chain.deviceId, serial: chain.serial },
-            { yadbPath: this.config.yadbPath, uiChannel: 'yadb', abortSignal: signal, params },
+            {
+              yadbPath: this.config.yadbPath,
+              uiChannel: 'yadb',
+              abortSignal: signal,
+              params,
+              model: createModelLocate(this.ctx.modelControl),
+            },
           )
           return result.status === 'succeeded'
         },
@@ -383,7 +391,12 @@ export class LoginApi extends Service {
               const result = await this.runner.run(
                 flow,
                 { deviceId: ch.deviceId, serial: ch.serial },
-                { yadbPath: this.config.yadbPath ?? 'yadb', abortSignal: sig, params: {} },
+                {
+                  yadbPath: this.config.yadbPath ?? 'yadb',
+                  abortSignal: sig,
+                  params: {},
+                  model: createModelLocate(this.ctx.modelControl),
+                },
               )
               return result.status === 'succeeded'
             },

@@ -23,7 +23,9 @@
     "@myt/devices": "workspace:*",
     "@myt/runs": "workspace:*",
     "@myt/myt-host": "workspace:*",
-    "@myt/myt-api-v3": "workspace:*"
+    "@myt/myt-api-v3": "workspace:*",
+    "@myt/ui-decide": "workspace:*",
+    "@myt/model": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.5"

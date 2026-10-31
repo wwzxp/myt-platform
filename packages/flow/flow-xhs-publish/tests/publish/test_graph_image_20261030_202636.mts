@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { readFile } from 'node:fs/promises'
 import { AdbDeviceControl } from '../../../../device/device-adb/src/index.ts'
-import { loadFlowGraph } from '../../../../automation/automation/src/graph/load.ts'
+import { validateFlowGraph } from '../../../../automation/automation/src/graph/load.ts'
 import { runXhsGraph } from '../../src/graph-runtime.ts'
 import { readdirSync } from 'node:fs'
 
@@ -14,7 +14,7 @@ const serial='127.0.0.1:5565'
 // 图来自工作流库；配置在 globalVariable 里
 const raw=JSON.parse(await readFile('F:/ai/myt_tools/data/workflows/发布图文笔记.json','utf8'))
 const cfg=raw.globalVariable?.properties
-const graph=await loadFlowGraph({ ...raw, data:{ app: cfg?.app?.default, maxSteps: cfg?.maxSteps?.default } })
+const graph=validateFlowGraph({ ...raw, data:{ app: cfg?.app?.default, maxSteps: cfg?.maxSteps?.default } })
 console.log(`图 ${graph.id}：${graph.nodes.length} 节点 / ${graph.edges.length} 边`)
 
 const model=Object.assign(async(prompt:string)=>{

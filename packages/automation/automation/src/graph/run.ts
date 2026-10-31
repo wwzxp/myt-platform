@@ -210,6 +210,45 @@ export async function runGraph(
   }
 }
 
+/**
+ * 页面等待的默认秒数。
+ *
+ * 取 step 引擎 `runAction` 的重试预算（5 轮 × 0.3–0.8s ≈ 3s）；
+ * 个别跳转慢的步骤在模板里用 `waitSeconds` 单独放大。
+ */
+const DEFAULT_PAGE_WAIT_SECONDS = 3
+
+/** 轮询页面的间隔区间（秒）。 */
+const PAGE_WAIT_GAP: readonly [number, number] = [0.3, 0.8]
+
+/**
+ * 等页面变成期望的之一。
+ *
+ * 与 step 引擎的 `waitForPage` 同一策略：按固定间隔轮询，超时即失败。
+ * 为什么不用固定 sleep：不同机型/负载下跳转耗时差好几秒，等固定值要么
+ * 不够（读到旧页）要么浪费（每次都白等）。
+ *
+ * @param ctx - 步骤上下文。
+ * @param runtime - 运行时依赖（页面表）。
+ * @param expect - 期望的页面 id 列表。
+ * @param timeoutSeconds - 最长等待秒数。
+ */
+async function waitForRequiredPage(
+  ctx: StepContext,
+  runtime: GraphRuntime,
+  expect: readonly string[],
+  timeoutSeconds: number,
+): Promise<{ ok: boolean; page: string }> {
+  const startedAt = Date.now()
+  let page = await currentPage(ctx, runtime.pages)
+  while (!expect.includes(page) && Date.now() - startedAt < timeoutSeconds * 1000) {
+    await sleepRandom(ctx, PAGE_WAIT_GAP[0], PAGE_WAIT_GAP[1])
+    ctx.throwIfCancelled()
+    page = await currentPage(ctx, runtime.pages)
+  }
+  return { ok: expect.includes(page), page }
+}
+
 /** 纯控制节点的执行器：固定返回一个端口。 */
 function constantExecutor(type: NodeType, port: PortId): NodeExecutor {
   return { type, execute: async () => ({ port }) }
@@ -273,11 +312,27 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
   const { ctx, node, runtime, inputs } = input
   const title = node.data.title ?? node.id
 
-  // ① 页面前置检查（不符走 mismatch）
+  // ① 页面前置检查：**先等**再判。
+  // 界面跳转有延迟，点完按钮立刻查页面会读到旧页——step 引擎用
+  // `waitForPage(..., 8_000)` 解决，这里用同一套策略。
   const requires = listInput(inputs, 'requires')
-  const page = await currentPage(ctx, runtime.pages)
+  const skipIfOn = listInput(inputs, 'skipIfOn')
+  const waitSeconds = numInput(inputs, 'waitSeconds', DEFAULT_PAGE_WAIT_SECONDS)
+  let page = await currentPage(ctx, runtime.pages)
+  // 已经到位：不必再点一次（step 引擎的「已在发布编辑页 → 跳过」）。
+  // 必须在「等 requires」之前判——已到位时 requires 通常不再匹配，
+  // 先等就会白等到超时再报 mismatch。
+  if (skipIfOn.includes(page)) return { port: 'success' }
   if (requires.length > 0 && !requires.includes(page)) {
-    return { port: 'mismatch', reason: `当前页面是 ${page}，期望 ${requires.join('/')}` }
+    const settled = await waitForRequiredPage(ctx, runtime, requires, waitSeconds)
+    page = settled.page
+    if (skipIfOn.includes(page)) return { port: 'success' }
+    if (!settled.ok) {
+      return {
+        port: 'mismatch',
+        reason: `等待 ${waitSeconds}s 后当前页面仍是 ${page}，期望 ${requires.join('/')}`,
+      }
+    }
   }
 
   // ② 执行方式（做什么）缺失：配置写漏了，直接判失败
@@ -445,7 +500,19 @@ async function executeConditionNode(input: NodeExecutorContext): Promise<NodeRes
 
   if (kind === 'page') {
     const expect = listInput(inputs, 'judgeExpect')
-    const page = await currentPage(ctx, runtime.pages)
+    // 「等离开这些页再判」：上一步刚点完，界面可能还在旧页，
+    // 立刻判会把「正在跳转」误判成「不在目标页」。
+    const waitWhile = listInput(inputs, 'judgeWaitWhile')
+    const waitSeconds = numInput(inputs, 'judgeWaitSeconds', 0)
+    let page = await currentPage(ctx, runtime.pages)
+    if (waitWhile.includes(page) && waitSeconds > 0) {
+      const deadline = Date.now() + waitSeconds * 1000
+      while (waitWhile.includes(page) && Date.now() < deadline) {
+        await sleepRandom(ctx, PAGE_WAIT_GAP[0], PAGE_WAIT_GAP[1])
+        ctx.throwIfCancelled()
+        page = await currentPage(ctx, runtime.pages)
+      }
+    }
     return { port: expect.includes(page) ? 'true' : 'false' }
   }
 

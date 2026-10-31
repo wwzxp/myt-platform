@@ -105,6 +105,10 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-01 21:00:00 | 修改 | `packages/automation/automation/src/graph/run.ts` | `mt-action` 补齐 step 版韧性能力：`waitSeconds`（等页面）、`skipIfOn`/`successPages`（已到位跳过）、`optional`（找不到算成功）、`rounds`/`gap`（重试预算）、`readyLocator`（等控件渲染）；`resolveText` 支持 `{{param}}` 模板 |
+| 2026-11-01 21:00:00 | 修改 | `data/workflows/发布图文笔记.json` | 按 step 版 ActionSpec 逐个校准 13 个节点参数；fill-title/fill-body 文本改用 `{{title}}`/`{{body}}` |
+| 2026-11-01 21:00:00 | bug修复 | `packages/flow/flow-xhs-publish/tests/publish/test_graph_*.mts` | 两个脚本调错 API（`loadFlowGraph` 传对象，应为 `validateFlowGraph`），一直跑不起来 |
+| 2026-11-01 21:00:00 | 修改 | `packages/core/runs-api/` `packages/flow/xhs-login/` | 调 `FlowRunner.run` 时传 `model`，此前恒为 undefined，意图定位静默退回硬编码定位器 |
 | 2026-11-01 18:00:00 | bug修复 | `packages/device/device-adb/src/index.ts` | `uiautomator dump` 在部分 ROM 写完文件后崩溃（exit 139），退出码被误判为失败；改为由后续 `cat` 内容判定成败 |
 | 2026-11-01 18:30:00 | 修改 | `packages/core/task-api/src/index.ts` | 接入 `modelControl`，`createContext` 传 `model: createModelLocate(...)`；意图定位不再走空实现 |
 | 2026-11-01 18:30:00 | 修改 | `packages/ai/model-openai/src/index.ts` | 加 `export default`（profile 按默认导出装配插件） |

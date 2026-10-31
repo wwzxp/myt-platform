@@ -82,7 +82,6 @@ export const NodeList: FC<NodeListProps> = (props) => {
       nodeJSON: json,
     });
   };
-  console.log('>>> fromNode', fromPort?.node);
   return (
     <NodesWrap style={{ width: 80 * 2 + 20 }}>
       {nodeRegistries

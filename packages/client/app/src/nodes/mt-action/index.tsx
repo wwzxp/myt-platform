@@ -43,12 +43,14 @@ export const MTActionNodeRegistry: FlowNodeRegistry = {
     return {
       id: `action_${nanoid(5)}`,
       type: WorkflowNodeType.MTAction,
+      // 与画布其它节点同构：值存在 `inputsValues`，来源显式（常量/引用/模板）。
       data: {
         title: `动作_${++index}`,
-        // 与 data/flows/*.json 的 config 结构保持一致
-        requires: [],
-        act: { kind: 'tap' },
-        locate: { intent: '' },
+        inputsValues: {
+          locateMode: { type: 'constant', content: 'intent' },
+          locateIntent: { type: 'constant', content: '' },
+          actKind: { type: 'constant', content: 'tap' },
+        },
       },
     }
   },

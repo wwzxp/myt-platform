@@ -24,6 +24,8 @@ export const MultiConditionNodeRegistry: FlowNodeRegistry = {
       'Connect multiple downstream branches. Only the corresponding branch will be executed if the set conditions are met.',
   },
   meta: {
+    /** 本项目引擎没有该节点的执行器；隐藏避免拖进来就校验失败。 */
+    nodePanelVisible: false,
     defaultPorts: [{ type: 'input' }],
     // Condition Outputs use dynamic port
     useDynamicPort: true,

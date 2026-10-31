@@ -39,7 +39,11 @@ export const MTLoopNodeRegistry: FlowNodeRegistry = {
     return {
       id: `loop_${nanoid(5)}`,
       type: WorkflowNodeType.MTLoop,
-      data: { title: `循环_${index + 1}`, loopFor: { max: 3 } },
+      // 与画布其它节点同构：值存在 `inputsValues`。
+      data: {
+        title: `循环_${index + 1}`,
+        inputsValues: { loopMax: { type: 'constant', content: 3 } },
+      },
       /** 循环体容器：内置起止块 */
       blocks: [
         {

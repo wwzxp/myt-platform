@@ -14,6 +14,8 @@ let index = 0;
 export const BreakNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.Break,
   meta: {
+    /** 本项目引擎没有该节点的执行器；隐藏避免拖进来就校验失败。 */
+    nodePanelVisible: false,
     defaultPorts: [{ type: 'input' }],
     sidebarDisabled: true,
     size: {

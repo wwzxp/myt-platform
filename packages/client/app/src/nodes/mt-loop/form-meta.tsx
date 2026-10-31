@@ -2,6 +2,7 @@
  * 循环节点的表单（中文）。
  */
 import { Field, FormMeta, FormRenderProps, ValidateTrigger } from '@flowgram.ai/free-layout-editor'
+import type { IFlowValue } from '@flowgram.ai/form-materials'
 import { InputNumber } from '@douyinfe/semi-ui'
 
 import { FormHeader, FormContent, FormItem } from '../../form-components'
@@ -12,13 +13,15 @@ export const renderForm = ({ form }: FormRenderProps<FlowNodeJSON>) => (
     <FormHeader />
     <FormContent>
       <FormItem name="最多重复几次" required>
-        <Field<number> name="loopFor.max">
+        <Field<IFlowValue | undefined> name="inputsValues.loopMax">
           {({ field }) => (
             <InputNumber
-              value={field.value ?? 3}
+              value={Number(field.value?.type === 'constant' ? field.value.content : 3)}
               min={1}
               max={100}
-              onChange={(v) => field.onChange(Number(v) || 1)}
+              onChange={(v) =>
+                field.onChange({ type: 'constant', content: Number(v) || 1 } as IFlowValue)
+              }
               title="循环体最多执行几轮"
             />
           )}
@@ -33,6 +36,7 @@ export const formMeta: FormMeta<FlowNodeJSON> = {
   validateTrigger: ValidateTrigger.onChange,
   validate: {
     title: ({ value }: { value: string }) => (value ? undefined : '请填写节点名称'),
-    'loopFor.max': ({ value }: { value: number }) => (value && value >= 1 ? undefined : '至少 1 次'),
+    'inputsValues.loopMax': ({ value }: { value: IFlowValue }) =>
+      (value?.type === 'constant' && Number(value.content) >= 1 ? undefined : '至少 1 次'),
   },
 }

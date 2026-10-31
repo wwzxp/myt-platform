@@ -96,9 +96,9 @@ function toInputs(config: Record<string, unknown>, type: NodeType): Record<strin
   }
   if (type === 'mt-action') {
     const act = config['act'] as Record<string, unknown> | undefined
-    if (act) for (const [k, v] of Object.entries(act)) put(`act.${k}`, v)
+    if (act) for (const [k, v] of Object.entries(act)) put(`act${cap(k)}`, v)
     const locate = config['locate'] as Record<string, unknown> | undefined
-    if (locate) for (const [k, v] of Object.entries(locate)) put(`locate.${k}`, v)
+    if (locate) for (const [k, v] of Object.entries(locate)) put(`locate${cap(k)}`, v)
     const requires = config['requires']
     if (Array.isArray(requires) && requires.length > 0) put('requires', requires.join(','))
     const settle = config['settle']
@@ -106,16 +106,21 @@ function toInputs(config: Record<string, unknown>, type: NodeType): Record<strin
     if (config['verify']) out['verify'] = { type: 'constant', content: config['verify'] }
   }
   if (type === 'mt-condition') {
-    put('judge.kind', config['kind'])
-    put('judge.key', config['key'])
+    put('judgeKind', config['kind'])
+    put('judgeKey', config['key'])
     const expect = config['expect']
-    if (Array.isArray(expect)) put('judge.expect', expect.join(','))
+    if (Array.isArray(expect)) put('judgeExpect', expect.join(','))
   }
   if (type === 'mt-loop' || type === 'loop') {
     const loopFor = config['loopFor'] as Record<string, unknown> | undefined
-    put('loopFor.max', loopFor ? loopFor['max'] : config['max'])
+    put('loopMax', loopFor ? loopFor['max'] : config['max'])
   }
   return out
+}
+
+/** 首字母大写：`kind` → `Kind`，用于拼接扁平键名。 */
+function cap(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 function node(
@@ -436,5 +441,82 @@ describe('validateFlowGraph — 加载校验', () => {
       ],
     }
     expect(() => validateFlowGraph(bad)).toThrow(FlowGraphError)
+  })
+})
+
+describe('动作节点 — 三种定位方式', () => {
+  /** 记录点击坐标的假设备。 */
+  function tappingCtx(points: Array<{ x: number; y: number }>) {
+    return fakeCtx({
+      device: {
+        tapLikeHuman: async (_serial: string, x: number, y: number) => {
+          points.push({ x, y })
+        },
+        shell: async () => '',
+      },
+    })
+  }
+
+  /** 用真实输入键名造动作节点，绕过测试辅助的旧形状转换。 */
+  function actionNode(id: string, values: Record<string, unknown>): FlowNode {
+    const inputsValues: Record<string, FlowValue> = {}
+    for (const [k, v] of Object.entries(values)) inputsValues[k] = { type: 'constant', content: v }
+    return {
+      id,
+      type: 'mt-action',
+      meta: { position: { x: 0, y: 0 } },
+      data: { title: id, inputsValues },
+    }
+  }
+
+  it('point：直接用像素坐标点击', async () => {
+    const points: Array<{ x: number; y: number }> = []
+    const result = await executeNode(
+      tappingCtx(points),
+      actionNode('a', {
+        locateMode: 'point',
+        locatePointX: 540,
+        locatePointY: 1200,
+        actKind: 'tap',
+      }),
+      runtime(),
+    )
+    expect(result.port).toBe('success')
+    expect(points).toEqual([{ x: 540, y: 1200 }])
+  })
+
+  it('ratio：按屏幕比例换算成坐标', async () => {
+    const points: Array<{ x: number; y: number }> = []
+    // 假设备 `wm size` 返回空，屏幕按 900x1600 兜底。
+    const result = await executeNode(
+      tappingCtx(points),
+      actionNode('a', { locateMode: 'ratio', locateRatioX: 0.5, locateRatioY: 0.5, actKind: 'tap' }),
+      runtime(),
+    )
+    expect(result.port).toBe('success')
+    expect(points).toEqual([{ x: 450, y: 800 }])
+  })
+
+  it('ratio 超出 0-1 时报错，不瞎点', async () => {
+    const points: Array<{ x: number; y: number }> = []
+    const result = await executeNode(
+      tappingCtx(points),
+      actionNode('a', { locateMode: 'ratio', locateRatioX: 1.5, locateRatioY: 0.5, actKind: 'tap' }),
+      runtime(),
+    )
+    expect(result.port).toBe('failure')
+    expect(result.reason).toContain('0 到 1')
+    expect(points).toEqual([])
+  })
+
+  it('intent 模式缺目标描述时报错', async () => {
+    const points: Array<{ x: number; y: number }> = []
+    const result = await executeNode(
+      tappingCtx(points),
+      actionNode('a', { locateMode: 'intent', actKind: 'tap' }),
+      runtime(),
+    )
+    expect(result.port).toBe('failure')
+    expect(result.reason).toContain('找什么')
   })
 })

@@ -31,9 +31,13 @@ export const MTConditionNodeRegistry: FlowNodeRegistry = {
     return {
       id: `cond_${nanoid(5)}`,
       type: WorkflowNodeType.MTCondition,
+      // 与画布其它节点同构：值存在 `inputsValues`。
       data: {
         title: `条件_${++index}`,
-        judge: { kind: 'page', value: '' },
+        inputsValues: {
+          judgeKind: { type: 'constant', content: 'page' },
+          judgeExpect: { type: 'constant', content: '' },
+        },
       },
     }
   },

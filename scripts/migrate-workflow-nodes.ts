@@ -125,35 +125,35 @@ function migrateNode(type: string, data: Record<string, unknown>): Record<string
     const locate = data['locate'] as Record<string, unknown> | undefined
     if (locate) {
       // 旧模板只有意图定位；没有坐标字段。
-      put('locate.mode', 'intent')
-      put('locate.intent', locate['intent'])
-      put('locate.fallback', locate['fallback'])
-      put('locate.vision', locate['vision'])
-      put('locate.strict', locate['strict'])
+      put('locateMode', 'intent')
+      put('locateIntent', locate['intent'])
+      put('locateFallback', locate['fallback'])
+      put('locateVision', locate['vision'])
+      put('locateStrict', locate['strict'])
     }
     const act = data['act'] as Record<string, unknown> | undefined
     if (act) {
-      put('act.kind', act['kind'])
-      put('act.name', act['name'])
-      put('act.uri', act['uri'])
-      put('act.text', act['text'])
-      put('act.inputLocator', act['inputLocator'])
-      put('act.match', act['match'])
+      put('actKind', act['kind'])
+      put('actName', act['name'])
+      put('actUri', act['uri'])
+      put('actText', act['text'])
+      put('actInputLocator', act['inputLocator'])
+      put('actMatch', act['match'])
       if (Array.isArray(act['extras']) && act['extras'].length > 0) {
-        put('act.extras', (act['extras'] as string[]).join(','))
+        put('actExtras', (act['extras'] as string[]).join(','))
       }
-      put('act.min', act['min'])
-      put('act.max', act['max'])
-      put('act.durationMs', act['durationMs'])
+      put('actMin', act['min'])
+      put('actMax', act['max'])
+      put('actDurationMs', act['durationMs'])
       const from = act['from'] as { x?: number; y?: number } | undefined
       if (from) {
-        put('act.from.x', from.x)
-        put('act.from.y', from.y)
+        put('actFromX', from.x)
+        put('actFromY', from.y)
       }
       const to = act['to'] as { x?: number; y?: number } | undefined
       if (to) {
-        put('act.to.x', to.x)
-        put('act.to.y', to.y)
+        put('actToX', to.x)
+        put('actToY', to.y)
       }
     }
     const requires = data['requires']
@@ -165,26 +165,26 @@ function migrateNode(type: string, data: Record<string, unknown>): Record<string
 
   if (type === 'mt-condition') {
     // 旧模板的条件字段是扁平的：`data.kind` / `data.key` / `data.expect` / `data.locate`。
-    put('judge.kind', data['kind'])
-    put('judge.key', data['key'])
+    put('judgeKind', data['kind'])
+    put('judgeKey', data['key'])
     const expect = data['expect']
-    if (Array.isArray(expect) && expect.length > 0) put('judge.expect', (expect as string[]).join(','))
+    if (Array.isArray(expect) && expect.length > 0) put('judgeExpect', (expect as string[]).join(','))
     const locate = data['locate'] as Record<string, unknown> | undefined
     if (locate) {
-      put('judge.locate.intent', locate['intent'])
-      put('judge.locate.fallback', locate['fallback'])
-      put('judge.locate.vision', locate['vision'])
-      put('judge.locate.strict', locate['strict'])
+      put('judgeLocateIntent', locate['intent'])
+      put('judgeLocateFallback', locate['fallback'])
+      put('judgeLocateVision', locate['vision'])
+      put('judgeLocateStrict', locate['strict'])
     }
   }
 
   if (type === 'mt-loop') {
     const loopFor = data['loopFor'] as Record<string, unknown> | undefined
     if (loopFor) {
-      put('loopFor.max', loopFor['max'])
+      put('loopMax', loopFor['max'])
       const gap = loopFor['gap']
-      if (Array.isArray(gap) && gap.length === 2) put('loopFor.gap', gap[0])
-      else put('loopFor.gap', gap)
+      if (Array.isArray(gap) && gap.length === 2) put('loopGap', gap[0])
+      else put('loopGap', gap)
     }
   }
 

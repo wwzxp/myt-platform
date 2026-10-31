@@ -105,6 +105,13 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-01 12:00:00 | 修改 | `packages/automation/automation/src/graph/types.ts` | 节点形状统一为 `NodeData`（`inputsValues`/`inputs`/`outputs`）+ `FlowValue`（constant/ref/template）；`LocateConfig` 加三种定位模式 |
+| 2026-11-01 12:00:00 | 新增 | `packages/automation/automation/src/graph/inputs.ts` | 节点输入求值：`parseNodeInputs` + `strInput`/`numInput`/`boolInput`/`listInput` |
+| 2026-11-01 12:00:00 | 修改 | `packages/automation/automation/src/graph/run.ts` | `switch(node.type)` 换成 `EXECUTORS` 注册表；动作节点支持 intent/point/ratio 三种定位；`GraphRuntime.outputs` 记录产出供下游 `ref` |
+| 2026-11-01 12:00:00 | 新增 | `scripts/migrate-workflow-nodes.ts` | 旧模板迁移脚本：幂等、带备份、`--dry-run`；已迁 56 个节点 |
+| 2026-11-01 12:00:00 | 修改 | `packages/client/app/src/nodes/mt-action/form-meta.tsx` | 表单加「怎么找」三选一（按文字/按屏幕比例/按像素坐标），按动作类型显隐字段 |
+| 2026-11-01 12:00:00 | 修改 | `packages/client/app/src/nodes/{mt-condition,mt-loop}/` | 表单与 `onAdd` 改用 `inputsValues` |
+| 2026-11-01 12:00:00 | 修改 | `packages/client/app/src/nodes/{multi-condition,break,continue}/index.ts` | `nodePanelVisible: false`：引擎没有执行器，隐藏避免拖进来就校验失败 |
 | 2026-11-01 07:00:00 | 新增 | `packages/flow/xhs-login/src/chain-runner.ts` | 链执行器：补回迁移遗漏的 `runChainStep`，登录后能按配方推进改资料→绑定→关注→收尾 |
 | 2026-11-01 07:00:00 | 新增 | `packages/flow/xhs-pack/` | 业务包装配：补回迁移遗漏的流程注册（此前 `ctx.flows` 为空，批量登录静默失败） |
 | 2026-11-01 07:00:00 | bug修复 | `packages/core/system-api/` | `hosts` 读 `MYT_HOSTS`；此前 `/api/hosts` 恒返回空数组 |

@@ -281,14 +281,14 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
   }
 
   // ② 执行方式（做什么）缺失：配置写漏了，直接判失败
-  const kind = strInput(inputs, 'act.kind')
+  const kind = strInput(inputs, 'actKind')
   if (!kind) return { port: 'failure', reason: `动作节点「${title}」缺少执行方式（做什么）` }
 
   const settle = settleOf(inputs)
 
   // ③ 自定义动作（不需要定位）
   if (kind === 'custom') {
-    const name = strInput(inputs, 'act.name')
+    const name = strInput(inputs, 'actName')
     const run = runtime.actions?.[name]
     if (!run) return { port: 'failure', reason: `未注册自定义动作：${name}` }
     try {
@@ -307,14 +307,14 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
     return { port: 'success' }
   }
   if (kind === 'openUri') {
-    const uri = strInput(inputs, 'act.uri')
+    const uri = strInput(inputs, 'actUri')
     if (!uri) return { port: 'failure', reason: `动作节点「${title}」缺少要打开的链接` }
     await ctx.device.openUri(ctx.serial, uri)
     if (settle) await sleepRandom(ctx, settle[0], settle[1])
     return { port: 'success' }
   }
   if (kind === 'sleep') {
-    await sleepRandom(ctx, numInput(inputs, 'act.min', 1), numInput(inputs, 'act.max', 1))
+    await sleepRandom(ctx, numInput(inputs, 'actMin', 1), numInput(inputs, 'actMax', 1))
     return { port: 'success' }
   }
   if (kind === 'swipe') {
@@ -322,14 +322,14 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
     await ctx.device.swipe(
       ctx.serial,
       {
-        x: Math.round(width * numInput(inputs, 'act.from.x', 0.5)),
-        y: Math.round(height * numInput(inputs, 'act.from.y', 0.8)),
+        x: Math.round(width * numInput(inputs, 'actFromX', 0.5)),
+        y: Math.round(height * numInput(inputs, 'actFromY', 0.8)),
       },
       {
-        x: Math.round(width * numInput(inputs, 'act.to.x', 0.5)),
-        y: Math.round(height * numInput(inputs, 'act.to.y', 0.2)),
+        x: Math.round(width * numInput(inputs, 'actToX', 0.5)),
+        y: Math.round(height * numInput(inputs, 'actToY', 0.2)),
       },
-      numInput(inputs, 'act.durationMs', 300),
+      numInput(inputs, 'actDurationMs', 300),
     )
     if (settle) await sleepRandom(ctx, settle[0], settle[1])
     return { port: 'success' }
@@ -342,18 +342,18 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
   if (kind === 'tap') {
     await tapHuman(ctx, target.point)
   } else if (kind === 'input') {
-    const text = strInput(inputs, 'act.text')
-    const inputLocator = runtime.locators[strInput(inputs, 'act.inputLocator')]
+    const text = strInput(inputs, 'actText')
+    const inputLocator = runtime.locators[strInput(inputs, 'actInputLocator')]
     if (!inputLocator) {
-      return { port: 'failure', reason: `未注册定位器：${strInput(inputs, 'act.inputLocator')}` }
+      return { port: 'failure', reason: `未注册定位器：${strInput(inputs, 'actInputLocator')}` }
     }
     await tapHuman(ctx, target.point)
     await sleepRandom(ctx, 0.3, 0.6)
     const snapshot = await ctx.snapshot({ refresh: true })
     const current = inputLocator(snapshot.root)
     if (current?.text) await clearPhoneInput(ctx, current.text)
-    const extras = listInput(inputs, 'act.extras')
-    const match = strInput(inputs, 'act.match', 'exact') === 'contains' ? 'contains' : 'exact'
+    const extras = listInput(inputs, 'actExtras')
+    const match = strInput(inputs, 'actMatch', 'exact') === 'contains' ? 'contains' : 'exact'
     await typeWithVerify(ctx, text, inputLocator, title, extras, match)
   } else {
     return { port: 'failure', reason: `动作节点「${title}」的执行方式「${kind}」未实现` }
@@ -384,11 +384,11 @@ type TargetResult = { ok: true; point: { x: number; y: number } } | { ok: false;
  */
 async function resolveTarget(input: NodeExecutorContext, title: string): Promise<TargetResult> {
   const { ctx, runtime, inputs } = input
-  const mode = strInput(inputs, 'locate.mode', 'intent')
+  const mode = strInput(inputs, 'locateMode', 'intent')
 
   if (mode === 'point') {
-    const x = numInput(inputs, 'locate.point.x', Number.NaN)
-    const y = numInput(inputs, 'locate.point.y', Number.NaN)
+    const x = numInput(inputs, 'locatePointX', Number.NaN)
+    const y = numInput(inputs, 'locatePointY', Number.NaN)
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       return { ok: false, reason: `「${title}」的坐标不合法（需要两个数字）` }
     }
@@ -396,8 +396,8 @@ async function resolveTarget(input: NodeExecutorContext, title: string): Promise
   }
 
   if (mode === 'ratio') {
-    const rx = numInput(inputs, 'locate.ratio.x', Number.NaN)
-    const ry = numInput(inputs, 'locate.ratio.y', Number.NaN)
+    const rx = numInput(inputs, 'locateRatioX', Number.NaN)
+    const ry = numInput(inputs, 'locateRatioY', Number.NaN)
     if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
       return { ok: false, reason: `「${title}」的比例坐标不合法（需要两个 0-1 的数字）` }
     }
@@ -408,14 +408,14 @@ async function resolveTarget(input: NodeExecutorContext, title: string): Promise
     return { ok: true, point: { x: Math.round(width * rx), y: Math.round(height * ry) } }
   }
 
-  const intent = strInput(inputs, 'locate.intent')
+  const intent = strInput(inputs, 'locateIntent')
   if (!intent) return { ok: false, reason: `「${title}」缺少「找什么」（目标描述）` }
-  const fallbackName = strInput(inputs, 'locate.fallback')
+  const fallbackName = strInput(inputs, 'locateFallback')
   const hit = await locateByModel(ctx, ctx.model, {
     intent,
     fallback: fallbackName ? runtime.locators[fallbackName] : undefined,
-    vision: boolInput(inputs, 'locate.vision', true),
-    strict: boolInput(inputs, 'locate.strict', false),
+    vision: boolInput(inputs, 'locateVision', true),
+    strict: boolInput(inputs, 'locateStrict', false),
   })
   if (!hit.ok || !hit.point) {
     return { ok: false, reason: hit.reason ?? `未定位到「${intent}」` }
@@ -440,30 +440,30 @@ function settleOf(inputs: Readonly<Record<string, unknown>>): [number, number] |
 async function executeConditionNode(input: NodeExecutorContext): Promise<NodeResult> {
   const { ctx, node, runtime, inputs } = input
   const title = node.data.title ?? node.id
-  const kind = strInput(inputs, 'judge.kind')
+  const kind = strInput(inputs, 'judgeKind')
   if (!kind) return { port: 'false', reason: `条件节点「${title}」缺少判断类型` }
 
   if (kind === 'page') {
-    const expect = listInput(inputs, 'judge.expect')
+    const expect = listInput(inputs, 'judgeExpect')
     const page = await currentPage(ctx, runtime.pages)
     return { port: expect.includes(page) ? 'true' : 'false' }
   }
 
   if (kind === 'exists') {
-    const intent = strInput(inputs, 'judge.locate.intent')
+    const intent = strInput(inputs, 'judgeLocateIntent')
     if (!intent) return { port: 'false', reason: `条件节点「${title}」缺少「找什么」` }
-    const fallbackName = strInput(inputs, 'judge.locate.fallback')
+    const fallbackName = strInput(inputs, 'judgeLocateFallback')
     const hit = await locateByModel(ctx, ctx.model, {
       intent,
       fallback: fallbackName ? runtime.locators[fallbackName] : undefined,
-      vision: boolInput(inputs, 'judge.locate.vision', true),
-      strict: boolInput(inputs, 'judge.locate.strict', false),
+      vision: boolInput(inputs, 'judgeLocateVision', true),
+      strict: boolInput(inputs, 'judgeLocateStrict', false),
     })
     return { port: hit.ok ? 'true' : 'false' }
   }
 
   if (kind === 'param') {
-    const key = strInput(inputs, 'judge.key')
+    const key = strInput(inputs, 'judgeKey')
     const value = ctx.flowParams[key]
     return { port: value !== undefined && value !== '' ? 'true' : 'false' }
   }
@@ -491,9 +491,9 @@ async function runLoopContainer(
     params: ctx.flowParams,
     outputs: runtime.outputs ?? new Map(),
   })
-  const max = numInput(inputs, 'loopFor.max', 1)
+  const max = numInput(inputs, 'loopMax', 1)
   // gap 是「每轮间隔秒数区间」，画布上一个值同时作用于上下界。
-  const gapSeconds = numInput(inputs, 'loopFor.gap', 0)
+  const gapSeconds = numInput(inputs, 'loopGap', 0)
   const gap: [number, number] | undefined = gapSeconds > 0 ? [gapSeconds, gapSeconds] : undefined
   const blocks = node.blocks ?? []
   if (blocks.length === 0) return { port: 'done' }

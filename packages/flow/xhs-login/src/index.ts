@@ -407,3 +407,6 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export default LoginApi
+
+export { parseSmsCodeLogin } from './tabs/login-tab.ts'
+export { startBatchLogin } from './batch-login.ts'

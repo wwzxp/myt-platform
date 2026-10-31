@@ -74,3 +74,7 @@
     # ── 业务 HTTP 接口（短信平台等，不碰设备）──
     - id: xhs-api
       name: '@myt/xhs-api'
+
+    # ── flowgram 运行时接口（validate / run / report / result / cancel）──
+    - id: task-api
+      name: '@myt/task-api'

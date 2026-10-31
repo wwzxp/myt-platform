@@ -1,0 +1,33 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../automation/automation/tsconfig.host.json"
+    },
+    {
+      "path": "../flow/tsconfig.host.json"
+    },
+    {
+      "path": "../../flow/flow-xhs-publish/tsconfig.host.json"
+    },
+    {
+      "path": "../../flow/xhs-login/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/device-adb/tsconfig.host.json"
+    }
+  ]
+}

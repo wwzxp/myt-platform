@@ -75,6 +75,10 @@
     - id: xhs-api
       name: '@myt/xhs-api'
 
+    # ── 运行记录接口（列表 / 单条 / 创建）──
+    - id: runs-api
+      name: '@myt/runs-api'
+
     # ── flowgram 运行时接口（validate / run / report / result / cancel）──
     - id: task-api
       name: '@myt/task-api'

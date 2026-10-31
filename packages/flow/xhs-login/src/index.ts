@@ -21,6 +21,9 @@ import { SourceStore, normalizeSource, EMPTY_SOURCE } from './tabs/device-source
 import { ImportConfigStore, pickUnusedBindAccount, syncAllAccountsToFile, syncNicknameTxt, syncProxyTxt, updateBindAccountStatus } from './tabs/import-config.ts'
 import { buildChainFlows, buildSingleTasks } from './tabs/login-tab.ts'
 import type { SourceKind } from './tabs/login-tab.ts'
+import { brandsOf, loadBrandModels } from './tabs/device-models.ts'
+import { parseAccountFile, emptyImportHint } from './tabs/account-import.ts'
+import type { ImportMode } from './tabs/account-import.ts'
 import { startBatchLogin } from './batch-login.ts'
 import { runPreStep } from './pre-step.ts'
 
@@ -36,6 +39,8 @@ export interface LoginApiConfig {
   actions?: ReadonlyArray<ActionDefinition>
   /** yadb 可执行文件路径；随应用分发。 */
   yadbPath?: string
+  /** 本地机型库路径；SDK 不可达时的回落。 */
+  devicesJson?: string
 }
 
 /**
@@ -114,6 +119,16 @@ export class LoginApi extends Service {
       kind: 'exact',
       path: '/api/tabs/login/cancel',
       handler: (req, res) => void this.cancel(req, res),
+    })
+    server.register({
+      kind: 'exact',
+      path: '/api/devices/models',
+      handler: (req, res) => void this.deviceModels(req, res),
+    })
+    server.register({
+      kind: 'exact',
+      path: '/api/accounts/import',
+      handler: (req, res) => void this.accountsImport(req, res),
     })
     server.register({
       kind: 'exact',
@@ -352,6 +367,64 @@ export class LoginApi extends Service {
       const deviceId = String(body['deviceId'] ?? '')
       if (!deviceId) return sendJson(res, 400, { error: '缺少 deviceId' })
       sendJson(res, 200, { deviceId, cancelled: true })
+    })
+  }
+
+  /**
+   * 机型库。
+   *
+   * 优先问 SDK（`get_devinfo` 带 modelid，换机型必须用它）；
+   * SDK 不可达时回落本地 devices.json（只有名字，不能用于换机型）。
+   */
+  private async deviceModels(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (req.method !== 'GET') return methodNotAllowed(res, req.method)
+    const brand = new URL(req.url ?? '/', 'http://x').searchParams.get('brand')
+
+    let sdkModels: Record<string, Record<string, number>> | null = null
+    try {
+      sdkModels = (await this.ctx.mytHost.listDeviceModels()) as Record<string, Record<string, number>>
+    } catch {
+      sdkModels = null
+    }
+
+    // SDK 的 data 里混了 `global_id` 这类标量字段，必须先净化再判断。
+    const cleaned: Record<string, Record<string, number>> = {}
+    for (const [name, value] of Object.entries(sdkModels ?? {})) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) cleaned[name] = value
+    }
+
+    if (Object.keys(cleaned).length > 0) {
+      if (brand) {
+        const detail = cleaned[brand] ?? {}
+        sendJson(res, 200, { brand, source: 'sdk', models: Object.keys(detail).sort(), modelIds: detail })
+        return
+      }
+      const brands = Object.keys(cleaned).sort()
+      const total = Object.values(cleaned).reduce((sum, m) => sum + Object.keys(m).length, 0)
+      sendJson(res, 200, { brands, total, source: 'sdk' })
+      return
+    }
+
+    const local = await loadBrandModels(this.config.devicesJson ?? '')
+    if (brand) {
+      sendJson(res, 200, { brand, source: 'local', models: local[brand] ?? [], modelIds: {} })
+      return
+    }
+    sendJson(res, 200, { brands: brandsOf(local), total: Object.values(local).flat().length, source: 'local' })
+  }
+
+  /** 账号文本解析：按模式把整段文本拆成账号行。 */
+  private accountsImport(req: IncomingMessage, res: ServerResponse): void {
+    if (req.method !== 'POST') return methodNotAllowed(res, req.method)
+    void readJson(req).then((body) => {
+      const mode = String(body['mode'] ?? 'sms') as ImportMode
+      const accounts = parseAccountFile(mode, String(body['text'] ?? ''))
+      sendJson(res, 200, {
+        mode,
+        count: accounts.length,
+        accounts,
+        hint: accounts.length === 0 ? emptyImportHint(mode) : '',
+      })
     })
   }
 

@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../host/webserver" },
+    { "path": "../flow/tsconfig.host.json" },
+    { "path": "../runs/tsconfig.host.json" },
+    { "path": "../../device/device-adb/tsconfig.host.json" }
+  ]
+}

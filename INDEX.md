@@ -105,6 +105,10 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-01 18:00:00 | bug修复 | `packages/device/device-adb/src/index.ts` | `uiautomator dump` 在部分 ROM 写完文件后崩溃（exit 139），退出码被误判为失败；改为由后续 `cat` 内容判定成败 |
+| 2026-11-01 18:30:00 | 修改 | `packages/core/task-api/src/index.ts` | 接入 `modelControl`，`createContext` 传 `model: createModelLocate(...)`；意图定位不再走空实现 |
+| 2026-11-01 18:30:00 | 修改 | `packages/ai/model-openai/src/index.ts` | 加 `export default`（profile 按默认导出装配插件） |
+| 2026-11-01 18:30:00 | 修改 | `profile/myt/cordis.patch.yml` | 装配 `@myt/model-openai`（Ollama 11434 + minicpm46） |
 | 2026-11-01 16:00:00 | 新增 | `packages/client/app/src/services/device-api.ts` | 设备列表客户端：只返回运行中且有 adbPort 的容器 |
 | 2026-11-01 16:00:00 | 修改 | `packages/client/app/src/components/testrun/testrun-panel/` | Test Run 面板加「目标设备」下拉，run 时把 deviceId 并入 inputs；加 device-picker 纵向布局 |
 | 2026-11-01 15:00:00 | bug修复 | `packages/app/desktop-host/src/host.ts` | 监听端口被忽略：webserver 只读 config 不读启动参数，改生成 overlay 补丁注入端口（按 id 更新，非新增） |

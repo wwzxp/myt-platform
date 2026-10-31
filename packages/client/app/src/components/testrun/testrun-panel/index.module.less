@@ -21,6 +21,25 @@
   }
 
 
+  /* 设备选择：独占一行，下拉占满宽度（横排会把标题挤成竖排） */
+  .device-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 12px 12px 0;
+
+    .title {
+      font-size: 15px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .hint {
+      font-size: 11px;
+      opacity: 0.6;
+    }
+  }
+
   .error {
     color: red;
     font-size: 14px;

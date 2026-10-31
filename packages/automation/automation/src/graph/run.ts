@@ -249,6 +249,36 @@ async function waitForRequiredPage(
   return { ok: expect.includes(page), page }
 }
 
+/**
+ * 等某个定位器能在界面上找到目标。
+ *
+ * 用于「页面已切换但控件还没渲染」的场景。定位器来自业务包的 `LocatorTable`，
+ * 与动作执行时用的是同一张表，不会出现「等的是一个元素、点的是另一个」。
+ *
+ * @param ctx - 步骤上下文。
+ * @param runtime - 运行时依赖（定位器表）。
+ * @param locatorName - 定位器名。
+ * @param timeoutSeconds - 最长等待秒数。
+ */
+async function waitForLocator(
+  ctx: StepContext,
+  runtime: GraphRuntime,
+  locatorName: string,
+  timeoutSeconds: number,
+): Promise<boolean> {
+  const locator = runtime.locators[locatorName]
+  if (!locator) return false
+  const deadline = Date.now() + timeoutSeconds * 1000
+  while (Date.now() < deadline) {
+    ctx.invalidateSnapshot?.()
+    const snapshot = await ctx.snapshot({ refresh: true })
+    if (locator(snapshot.root)) return true
+    ctx.throwIfCancelled()
+    await sleepRandom(ctx, PAGE_WAIT_GAP[0], PAGE_WAIT_GAP[1])
+  }
+  return false
+}
+
 /** 纯控制节点的执行器：固定返回一个端口。 */
 function constantExecutor(type: NodeType, port: PortId): NodeExecutor {
   return { type, execute: async () => ({ port }) }
@@ -390,9 +420,40 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
     return { port: 'success' }
   }
 
-  // ⑤ 需要定位的动作（tap / input）
+  // ④.5 目标页面已达成 → 成功退出，不再执行动作。
+  // 对应 step 版 `if (page === 'post-editor') return` 的「已到位跳过」，
+  // 但这里放在动作之前，所以 requires 允许范围可以更严格。
+  const successPages = listInput(inputs, 'successPages')
+  if (successPages.length > 0) {
+    const now = await currentPage(ctx, runtime.pages)
+    if (successPages.includes(now)) return { port: 'success', reason: `已在 ${now}，跳过` }
+  }
+
+  // ⑤ 等目标真的出现在界面上再动手。
+  // 实测教训：Activity 已切换 ≠ 界面渲染完成，直接往下走会把标题输进正文框。
+  const readyLocator = strInput(inputs, 'readyLocator')
+  if (readyLocator) {
+    const ready = await waitForLocator(ctx, runtime, readyLocator, numInput(inputs, 'readySeconds', 8))
+    if (!ready) {
+      return { port: 'failure', reason: `「${title}」等待元素就绪超时：${readyLocator}` }
+    }
+  }
+
+  // ⑥ 需要定位的动作（tap / input）
   const target = await resolveTarget(input, title)
-  if (!target.ok) return { port: 'failure', reason: target.reason }
+  if (!target.ok) {
+    // 可选动作：找不到就是「界面上本来就没有这个弹窗」，直接算成功。
+    // 与 step 引擎 `optional: true` 完全同义——弹窗类步骤全靠它。
+    if (boolInput(inputs, 'optional', false)) {
+      return { port: 'success', reason: `可选动作未命中，视为成功：${target.reason}` }
+    }
+    // 找不到但页面已经变了：说明前一步点完后界面自己跳走了。
+    if (successPages.length > 0) {
+      const now = await currentPage(ctx, runtime.pages)
+      if (successPages.includes(now)) return { port: 'success', reason: `已在 ${now}` }
+    }
+    return { port: 'failure', reason: target.reason }
+  }
 
   if (kind === 'tap') {
     await tapHuman(ctx, target.point)
@@ -416,7 +477,13 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
 
   if (settle) await sleepRandom(ctx, settle[0], settle[1])
 
-  // ⑥ 校验
+  // ⑥ 点完若已到目标页，直接成功（不必再走后续校验）。
+  if (successPages.length > 0) {
+    const arrived = await waitForRequiredPage(ctx, runtime, successPages, numInput(inputs, 'arriveSeconds', 5))
+    if (arrived.ok) return { port: 'success' }
+  }
+
+  // ⑦ 校验
   const verifyConfig = inputs['verify'] as VerifyConfig | undefined
   if (verifyConfig) {
     const passed = await verify(ctx, verifyConfig, runtime)
@@ -440,6 +507,9 @@ type TargetResult = { ok: true; point: { x: number; y: number } } | { ok: false;
 async function resolveTarget(input: NodeExecutorContext, title: string): Promise<TargetResult> {
   const { ctx, runtime, inputs } = input
   const mode = strInput(inputs, 'locateMode', 'intent')
+  // 重试预算：与 step 引擎 `rounds` / `gap` 同义。
+  const rounds = Math.max(1, numInput(inputs, 'rounds', 1))
+  const gapSeconds = numInput(inputs, 'gap', 0)
 
   if (mode === 'point') {
     const x = numInput(inputs, 'locatePointX', Number.NaN)
@@ -466,16 +536,23 @@ async function resolveTarget(input: NodeExecutorContext, title: string): Promise
   const intent = strInput(inputs, 'locateIntent')
   if (!intent) return { ok: false, reason: `「${title}」缺少「找什么」（目标描述）` }
   const fallbackName = strInput(inputs, 'locateFallback')
-  const hit = await locateByModel(ctx, ctx.model, {
-    intent,
-    fallback: fallbackName ? runtime.locators[fallbackName] : undefined,
-    vision: boolInput(inputs, 'locateVision', true),
-    strict: boolInput(inputs, 'locateStrict', false),
-  })
-  if (!hit.ok || !hit.point) {
-    return { ok: false, reason: hit.reason ?? `未定位到「${intent}」` }
+  let lastReason = ''
+  for (let round = 0; round < rounds; round += 1) {
+    ctx.throwIfCancelled()
+    const hit = await locateByModel(ctx, ctx.model, {
+      intent,
+      fallback: fallbackName ? runtime.locators[fallbackName] : undefined,
+      vision: boolInput(inputs, 'locateVision', true),
+      strict: boolInput(inputs, 'locateStrict', false),
+    })
+    if (hit.ok && hit.point) return { ok: true, point: hit.point }
+    lastReason = hit.reason ?? `未定位到「${intent}」`
+    // 最后一轮不再等待。
+    if (round < rounds - 1) await sleepRandom(ctx, gapSeconds, gapSeconds + 0.3)
+    // 每轮之间刷新 UI 快照，否则会反复在同一份旧树上找不到。
+    ctx.invalidateSnapshot?.()
   }
-  return { ok: true, point: hit.point }
+  return { ok: false, reason: lastReason }
 }
 
 /**
@@ -646,6 +723,8 @@ async function verify(
       const snapshot = await ctx.snapshot({ refresh: true })
       const current = locator(snapshot.root)
       const actual = (current?.text ?? '').trim()
+      // 期望值可能是参数名，也可能是 `{{param}}` 模板；两种都支持，
+      // 否则模板里写 `{{title}}` 会拿字面量去比对，永远不相等。
       const expected = resolveText(ctx, config.text).trim()
       return config.match === 'contains' ? actual.includes(expected) : actual === expected
     }
@@ -664,6 +743,13 @@ async function verify(
 
 /** 流程参数优先：JSON 里的 `text` 若在 `flowParams` 中存在同名键，用参数值。 */
 function resolveText(ctx: StepContext, text: string): string {
+  // `{{name}}` 形式：按参数插值（与 inputsValues 的 template 语义一致）。
+  const interpolated = text.replace(/\{\{\s*([\w.-]+)\s*\}\}/gu, (whole, key: string) => {
+    const value = ctx.flowParams[key]
+    return value !== undefined ? value : whole
+  })
+  if (interpolated !== text) return interpolated
+  // 裸参数名（旧写法）：参数存在且非空则取参数值。
   const fromParam = ctx.flowParams[text]
   return fromParam !== undefined && fromParam !== '' ? fromParam : text
 }

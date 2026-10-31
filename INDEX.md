@@ -105,6 +105,10 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-01 22:00:00 | bug修复 | `packages/automation/automation/src/graph/run.ts` | 失败原因被吞：`failure` 端口有连线时节点 reason 丢失，只剩「经 X 端口中止」。现在 trail 记录每个节点 reason，中止时带出第一个 |
+| 2026-11-01 22:00:00 | bug修复 | `packages/automation/ui-decide/src/ui-locate.ts` | 候选多（18+）时模型输出 `{"index":[17,19,...]}` 被 64 token 截断，定位作废。提示词约束单选 + 解析器只接受单元素数组 |
+| 2026-11-01 22:00:00 | 修改 | `packages/flow/flow-xhs-publish/src/graph-runtime.ts` | `waitGallery` 补 5 轮重试（此前只重开一次）；`prepareEnvironment` 已到位跳过；加 `safeCurrentPage` 避免无 `ctx.app.pages` 时抛错 |
+| 2026-11-01 22:00:00 | 新增 | `packages/automation/automation/src/graph/run.ts` | `retryOpenUri` 通用能力（轮询 + 重开深链），对应 step 版 wait-gallery |
 | 2026-11-01 21:00:00 | 修改 | `packages/automation/automation/src/graph/run.ts` | `mt-action` 补齐 step 版韧性能力：`waitSeconds`（等页面）、`skipIfOn`/`successPages`（已到位跳过）、`optional`（找不到算成功）、`rounds`/`gap`（重试预算）、`readyLocator`（等控件渲染）；`resolveText` 支持 `{{param}}` 模板 |
 | 2026-11-01 21:00:00 | 修改 | `data/workflows/发布图文笔记.json` | 按 step 版 ActionSpec 逐个校准 13 个节点参数；fill-title/fill-body 文本改用 `{{title}}`/`{{body}}` |
 | 2026-11-01 21:00:00 | bug修复 | `packages/flow/flow-xhs-publish/tests/publish/test_graph_*.mts` | 两个脚本调错 API（`loadFlowGraph` 传对象，应为 `validateFlowGraph`），一直跑不起来 |

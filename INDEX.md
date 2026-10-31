@@ -49,7 +49,14 @@
 | `packages/flow/flow-xhs/src/dialogs.ts` | 弹窗定位：生日 Next、Skip、风险插件、See original、Later |
 | `packages/flow/flow-xhs/src/actions.ts` | 动作原语：清空输入、拟人输入（5 次重试+回读）、等转圈、连点 |
 | `packages/flow/flow-xhs/` | 小红书流程包：包名、深链常量、探测流程、手机号登录准备流程 |
-| `packages/app/kernel/` | 内核：`src/kernel.ts` 可嵌入启动器、`src/main.ts` 开发入口、`src/host.ts` utilityProcess 入口、`src/flow-task.ts` 流程图任务调度(实现 flowgram 5 个运行时接口)、`scripts/build.mjs` esbuild 单文件打包 |
+| `packages/app/desktop-host/` | **宿主入口**：`src/host.ts` 读 `MYT_*` 环境变量、装配 `profile/myt`、向 Electron 父端口上报；`src/startup.ts` 是 utilityProcess 执行入口；不含业务逻辑 |
+| `profile/myt/cordis.patch.yml` | **装配清单**：YAML 声明式列出全部插件与配置；加功能是加一行条目，不改启动器 |
+| `packages/core/system-api/` | 系统类 HTTP（`@myt/system-api`）：`/api/health`、`/api/data-dir`、`/api/hosts`、`/api/containers`、`/api/flows` |
+| `packages/device/device-api/` | 设备类 HTTP（`@myt/device-api`）：`/api/devices`、`/api/actions/{start,stop}`、`/api/device/{connect,dump,tap}` |
+| `packages/flow/xhs-api/` | 短信平台 HTTP（`@myt/xhs-api`）：`/api/herosms/{balance,countries,prices,activations,cancel}`；API Key 由请求体传入不落盘 |
+| `packages/flow/xhs-login/` | 登录域（`@myt/xhs-login`）：11 个 `/api/tabs/login/*` + `/api/devices/models` + `/api/accounts/import`；`src/tabs/` 是 11 个纯函数模块，`src/batch-login.ts` 是编排层，`src/pre-step.ts` 是前置动作 |
+| `packages/core/task-api/` | flowgram 运行时（`@myt/task-api`）：`/api/task/{validate,run,report,result,cancel}` + `/api/accounts/parse-sms` |
+| `packages/core/runs-api/` | 运行记录（`@myt/runs-api`）：`/api/runs`（GET 列表/POST 创建）、`/api/runs/<id>` |
 | `packages/app/desktop/` | Electron 壳：单实例、端口协商、健康检查、托盘、窗口生命周期；`build/icon.ico` |
 | `packages/client/ui/` | **旧 UI（保留但隐藏）**：设备农场页面（单文件 HTML，无构建步骤）；不再挂路由 |
 | `packages/client/app/` | **新 UI**（`@myt/ui-app`）：基于 `bytedance/flowgram.ai` 完整 demo 改造的流程画布；rsbuild 构建 |
@@ -76,7 +83,13 @@
 | `@myt/ui-decide` | UI 决策：意图 → 坐标（只要求序号，位置推理交给代码） | `locate()`、`createModelLocate(modelControl)` |
 | `@myt/automation` | 安卓自动化引擎：五步循环、页面注册表、三层异常恢复、三级定位 | `runAction`、`PageRegistry`、`recoverTo`、`locateByModel` |
 | `@myt/flow-xhs-publish` | 小红书**发布**流程（与上号流程完全解耦，只依赖 `@myt/device`）：`publish-locators`（图文发布全量定位器 + Android 14 Photo Picker 候选）、`publish-actions`（粘贴/清空/回读校验）；流程 `xhs.publish.image`（16 步） | `createPublishImageFlow(input)` |
-| `@myt/kernel` | 启动 `Context`、装载 Provider/Registry/Flow、起 HTTP；变更动作只调一次并回查状态 | `/api/health`、`/api/hosts`、`/api/containers`、`/api/devices`、`/api/flows`、`/api/runs`（GET/POST）、`/api/device/{connect,dump,tap}`、`POST /api/actions/{start,stop}`；环境变量 `MYT_PORT` / `MYT_SDK_BASE` / `MYT_HOSTS` / `MYT_ADB_PATH` |
+| `@myt/desktop-host` | Electron utilityProcess 入口：读 `MYT_*` 环境变量 → `runProfile` 装配 → 上报端口。业务逻辑为零 | `MYT_PORT` / `MYT_SDK_BASE` / `MYT_HOSTS` / `MYT_STATE_FILE` / `MYT_PROFILE_DIR` |
+| `@myt/system-api` | 平台自身信息，不认识业务 | 见目录结构 |
+| `@myt/device-api` | 设备清单与容器生命周期；`defaultHost` 由配置注入，不猜宿主 | 见目录结构 |
+| `@myt/xhs-api` | 短信平台查询；凭据不落盘 | 见目录结构 |
+| `@myt/xhs-login` | 登录域三层：`tabs/`（纯函数）、`batch-login.ts`（编排）、`index.ts`（HTTP 薄封装） | 见目录结构 |
+| `@myt/task-api` | flowgram 5 个运行时端点 + 账号文本解析 | 见目录结构 |
+| `@myt/runs-api` | 运行记录读写；同设备并发创建返回 409 | 见目录结构 |
 | `@myt/ui`（html） | 设备农场：宿主下拉、统计卡、状态筛选、搜索、容器表、启动/停止、跑探测流程 | 调 `/api/*` |
 | `@myt/ui-app` | **新 UI**（流程画布）：完整引入 `bytedance/flowgram.ai` demo（241 文件）+ 三个自定义业务节点；画布、插件、表单、工具栏、缩略图、Test Run 全部来自上游 | `mtaction` / `mt-condition` / `mt-loop` 三个节点；`initial-data.ts` 为流程数据 |
 | `myt-desktop` | Electron 壳（ADR-0003）：单实例锁、端口协商、`utilityProcess` 起内核、`/api/health` 轮询 40s、托盘、关闭即隐藏、外部链接走系统浏览器、NSIS 打包 | `MYT-<ver>-Setup.exe`；日志 `%APPDATA%/myt-desktop/desktop-main.log` |
@@ -89,6 +102,15 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-01 01:10:00 | 删除 | `packages/app/kernel/` | **删除 1652 行单体内核**：40 个路由全部迁到 6 个领域插件包，`main.cjs` 改指 `desktop-host` |
+| 2026-11-01 01:10:00 | 新增 | `packages/app/desktop-host/` | 宿主入口：读 `MYT_*` env → `runProfile` 装配 profile → 上报端口；业务逻辑为零 |
+| 2026-11-01 01:00:00 | 新增 | `packages/core/runs-api/` | 运行记录 3 条路由；修 dsh prefix 路由不能带尾部斜杠的坑 |
+| 2026-11-01 00:30:00 | 新增 | `packages/core/task-api/` | flowgram 5 个运行时端点 + `/api/accounts/parse-sms`；解析函数从 `@myt/xhs-login` 导入而非重写 |
+| 2026-11-01 00:00:00 | 新增 | `packages/flow/xhs-login/` | 登录域 13 条路由：`tabs/`（11 个纯函数模块 1920 行）+ `batch-login.ts`（编排）+ `pre-step.ts`（前置动作）+ `index.ts`（HTTP） |
+| 2026-10-31 23:30:00 | 新增 | `packages/flow/xhs-api/` | HeroSMS 5 条路由；API Key 由请求体传入不落盘 |
+| 2026-10-31 23:00:00 | 新增 | `packages/device/device-api/` | 设备 7 条路由；`defaultHost` 由配置注入，请求没带 host 时返回 400 而不是猜 |
+| 2026-10-31 22:00:00 | 新增 | `packages/core/system-api/` | 系统类 5 条路由：health / data-dir / hosts / containers / flows |
+| 2026-10-31 21:00:00 | 新增 | `profile/myt/cordis.patch.yml` | **YAML 声明式装配**：14 个插件在此登记；认证链路 token → cookie → API 跑通 |
 | 2026-10-31 12:20:00 | 修改 | `packages/client/app/package.json` | TypeScript 升级到 `^6.0.3`，**全项目 TS 版本统一**（此前前端 5.9 / 其余 6.0 不兼容） |
 | 2026-10-31 12:20:00 | 修改 | `packages/client/app/tsconfig.json` | 恢复 `ignoreDeprecations: "6.0"`（TS 6 才识别，5.9 会报 TS5103） |
 | 2026-10-31 12:20:00 | 修改 | `tsconfig.host.json` | `client/app` 重新纳入聚合，references 352 个；全量 `tsc -b` 0 错误 |

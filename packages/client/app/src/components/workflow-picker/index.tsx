@@ -6,7 +6,14 @@
  */
 import { useEffect, useState } from 'react';
 
-import { listWorkflows, type WorkflowSummary } from '../../services/workflow-api';
+import { Button, Input } from '@douyinfe/semi-ui';
+
+import {
+  createWorkflow,
+  deleteWorkflow,
+  listWorkflows,
+  type WorkflowSummary,
+} from '../../services/workflow-api';
 
 /** 一行流程的展示时间（近的就显示相对时间）。 */
 function formatTime(ms: number): string {
@@ -21,20 +28,49 @@ function formatTime(ms: number): string {
 export const WorkflowPicker = () => {
   const [flows, setFlows] = useState<WorkflowSummary[] | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
+  /** 重新拉列表；新建/删除后调用。 */
+  const reload = () => {
     listWorkflows()
       .then((rows) => {
-        if (alive) setFlows(rows);
+        setFlows(rows);
+        setError(undefined);
       })
-      .catch((err: unknown) => {
-        if (alive) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+  };
+
+  useEffect(reload, []);
+
+  /** 新建流程并直接进去编辑。 */
+  const onCreate = async () => {
+    const name = newName.trim();
+    if (!name || busy) return;
+    setBusy(true);
+    try {
+      const created = await createWorkflow(name);
+      window.location.search = `?flow=${encodeURIComponent(created.fileName)}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  };
+
+  /** 删除流程；需要二次确认，删的是磁盘文件不可恢复。 */
+  const onDelete = async (flow: WorkflowSummary) => {
+    if (busy) return;
+    if (!window.confirm(`删除流程「${flow.name}」？文件会从磁盘移除，无法恢复。`)) return;
+    setBusy(true);
+    try {
+      await deleteWorkflow(flow.fileName);
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const wrap: React.CSSProperties = { padding: 32, maxWidth: 720, margin: '0 auto' };
 
@@ -63,6 +99,19 @@ export const WorkflowPicker = () => {
         流程文件保存在 <code>data/workflows/</code>，文件名即流程名。
       </p>
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <Input
+          value={newName}
+          onChange={(v) => setNewName(String(v))}
+          onEnterPress={onCreate}
+          placeholder="新流程名称"
+          style={{ flex: 1 }}
+        />
+        <Button theme="solid" onClick={onCreate} loading={busy} disabled={!newName.trim()}>
+          新建流程
+        </Button>
+      </div>
+
       {flows.length === 0 ? (
         <p>还没有流程。在 <code>data/workflows/</code> 下新建一个 <code>.json</code> 文件后刷新本页。</p>
       ) : (
@@ -87,8 +136,19 @@ export const WorkflowPicker = () => {
               >
                 {flow.name}
               </a>
-              <span style={{ fontSize: 12, opacity: 0.6 }}>
-                {flow.nodeCount} 个节点 · {formatTime(flow.updatedAt)}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 12, opacity: 0.6 }}>
+                  {flow.nodeCount} 个节点 · {formatTime(flow.updatedAt)}
+                </span>
+                <Button
+                  size="small"
+                  type="danger"
+                  theme="borderless"
+                  onClick={() => onDelete(flow)}
+                  disabled={busy}
+                >
+                  删除
+                </Button>
               </span>
             </li>
           ))}

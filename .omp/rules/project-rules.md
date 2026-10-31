@@ -18,6 +18,7 @@ alwaysApply: true
 | § 6 | **禁止自行偏离用户要求（强制：必须问）** |
 | § 7 | **禁止同项目多版本工具链（强制：统一或问）** |
 | § 8 | **禁止兼容层（强制：直接改，不留旧路径）** |
+| § 9 | **浏览器操作规范（强制：一律走 ego，用完立刻关页）** |
 
 ---
 
@@ -512,3 +513,40 @@ resources/
 ### 用户原话
 
 > 我还很讨厌一个东西，兼容层，非必要做这玩意干嘛，完全源码开发的时候为什么要做这玩意，你看看 dsh 的源码有这玩意吗。
+
+---
+
+## 9. 浏览器操作规范（强制）
+
+### 一律使用 ego 浏览器
+
+**所有**浏览器自动化都走 ego 浏览器（ego lite），不用内置 `browser` 工具、不用 curl 抓页面。
+
+| 项 | 值 |
+|---|---|
+| 可执行文件 | `D:\ego\ego lite\Application\<版本>\ego-browser.exe`（不在 PATH 上） |
+| 调用方式 | PowerShell：`& '<上面路径>' nodejs -e "await import('file:///F:/.../round-01.mjs')"` |
+| 为什么 | ego 是用户本机运行中的浏览器，带登录态与真实环境；内置浏览器是另起进程，跟用户看到的不是一回事 |
+
+**PowerShell 传脚本必须用 `.mjs` 文件**：`-e` 里的双引号会被拆成多个参数，多行脚本必然损坏。中文内容只能写在文件里，不能放进 `-e`。
+
+### 用完立刻关闭页面（强制）
+
+**验证完的页面必须当场关掉，不许留在用户机器上。** 这是用户提过两次的要求。
+
+| 工具 | 关闭方式 |
+|---|---|
+| ego | `await task.finish({ keep: [] })`（`keep` 必须是 `"all"` 或页标签数组；空数组 = 全关） |
+| omp 内置 | `await browser.close({ name })` 或 `await browser.close({ all: true })` |
+
+判定标准：**每次跑完浏览器脚本，下一个动作就应该是关页**，不要攒到最后一起关。
+多轮脚本共用同一个 task space 时，最后一轮必须显式关闭。
+
+### ego 的坑（实测）
+
+1. **认证跳转会丢 query**：先访问 `/?token=...` 建立 cookie，再访问 `/?flow=...`。带 token 的那次会被 303 到 `./`，`flow` 参数丢失。
+2. **`page.evaluate` 里触发跳转会中断**：`location.search = ...` 之后 evaluate 抛 `Inspected target navigated or closed`。要拆成「填值」和「点击」两次 evaluate，中间在 Node 侧 `await`。
+3. **脚本是 Node 不是页面**：`window` / `document` 只能写在 `page.evaluate()` 里；顶层是 Node（无 DOM）。
+4. **每轮新进程**：JS 变量不保留；task space 与页标签保留，用 `taskSpace(<id>)` 恢复。
+5. **不是 Playwright**：没有 `locator()` / `getByRole()` / `route()`。只用 Skill 里列的 API，够不到就用 `page.evaluate()`。
+6. **用法指南**：`ego-browser skill` 打印当前版本对应的完整 API。

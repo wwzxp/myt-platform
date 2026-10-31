@@ -201,7 +201,8 @@ function validateNodes(input: unknown): FlowNode[] {
     if (!isObject(item)) throw new FlowGraphError(`nodes[${index}] 必须是对象`)
     const nodeId = str(item, 'id')
     const typeRaw = str(item, 'type')
-    const types: NodeType[] = ['start', 'mt-action', 'mt-condition', 'mt-loop', 'loop', 'end']
+    // 白名单从端口表派生：加节点只需改 `PORTS_OF_TYPE`，不会两处不同步。
+    const types = Object.keys(PORTS_OF_TYPE) as NodeType[]
     if (!types.includes(typeRaw as NodeType)) {
       throw new FlowGraphError(
         `节点「${nodeId}」的 type 非法：${typeRaw}（可用：${types.join('/')}）`,

@@ -5,15 +5,9 @@ import type { PageRegistry } from '../page-guard.ts'
 import { locateByModel } from '../locate-adapter.ts'
 import { clearPhoneInput, sleepRandom, tapHuman, typeWithVerify } from '../actions.ts'
 import { isLoopType } from './types.ts'
-import type {
-  ActionNodeConfig,
-  ConditionNodeConfig,
-  FlowGraph,
-  FlowNode,
-  GraphOutcome,
-  LoopNodeConfig,
-  PortId,
-} from './types.ts'
+import type { FlowGraph, FlowNode, GraphOutcome, NodeType, PortId, VerifyConfig } from './types.ts'
+import { boolInput, listInput, numInput, parseNodeInputs, strInput } from './inputs.ts'
+import { FlowGraphError } from './load.ts'
 
 /**
  * 图引擎：按端口路由执行流程图。
@@ -53,6 +47,12 @@ export interface GraphRuntime {
   verifiers?: CustomVerifiers
   /** 自定义测量。 */
   measures?: CustomMeasures
+  /**
+   * 已执行节点的产出：节点 id → outputs。
+   *
+   * 由 `runGraph` 在每次节点执行后写入；节点的 `ref` / `template` 输入从这里取值。
+   */
+  outputs?: Map<string, Record<string, unknown>>
 }
 
 /** 节点执行结果：选了哪个端口。 */
@@ -61,6 +61,40 @@ export interface NodeResult {
   port: PortId
   /** 失败原因（port 为 failure/mismatch 时）。 */
   reason?: string
+  /**
+   * 本节点的产出，供下游 `ref` 引用。
+   *
+   * 省略表示无产出（纯控制节点）。
+   */
+  outputs?: Record<string, unknown>
+}
+
+/** 执行器上下文：节点本身、运行时依赖、已求值的输入。 */
+export interface NodeExecutorContext {
+  /** 步骤上下文（设备、事件流、取消信号）。 */
+  ctx: StepContext
+  /** 当前节点。 */
+  node: FlowNode
+  /** 运行时依赖。 */
+  runtime: GraphRuntime
+  /** 已求值的输入（`inputsValues` 展开后的实际值）。 */
+  inputs: Readonly<Record<string, unknown>>
+}
+
+/**
+ * 节点执行器。
+ *
+ * 与 flowgram demo 同形：每种节点一个类，引擎只按 `type` 查表分发，
+ * 不认识任何具体节点语义。
+ */
+export interface NodeExecutor {
+  /** 本执行器负责的节点类型。 */
+  readonly type: NodeType
+  /**
+   * 执行一个节点。
+   * @param input 上下文（含已求值的输入）。
+   */
+  execute(input: NodeExecutorContext): Promise<NodeResult>
 }
 
 /**
@@ -77,6 +111,9 @@ export async function runGraph(
 ): Promise<GraphOutcome> {
   const startedAt = Date.now()
   const trail: GraphOutcome['trail'] = []
+  // 节点产出表：`ref` / `template` 从这里取值。每次运行独立，不跨运行共享。
+  if (!runtime.outputs) runtime.outputs = new Map<string, Record<string, unknown>>()
+  else runtime.outputs.clear()
   const edgesByPort = new Map<string, string>()
   for (const edge of graph.edges) {
     edgesByPort.set(`${edge.sourceNodeID}:${edge.sourcePortID}`, edge.targetNodeID)
@@ -146,6 +183,8 @@ export async function runGraph(
     } else {
       result = await executeNode(ctx, node, runtime)
     }
+    // 记下产出，供下游 `ref` / `template` 取值。
+    if (result.outputs) runtime.outputs?.set(node.id, result.outputs)
     trail.push({ node: node.id, port: result.port, ms: Date.now() - nodeStartedAt })
 
     const next = edgesByPort.get(`${node.id}:${result.port}`)
@@ -171,6 +210,43 @@ export async function runGraph(
   }
 }
 
+/** 纯控制节点的执行器：固定返回一个端口。 */
+function constantExecutor(type: NodeType, port: PortId): NodeExecutor {
+  return { type, execute: async () => ({ port }) }
+}
+
+/** 全部执行器清单；新增节点类型时只需在此登记。 */
+const EXECUTOR_LIST: readonly NodeExecutor[] = [
+  constantExecutor('start', 'out'),
+  constantExecutor('end', 'done'),
+  // 容器式循环由 runLoopContainer 处理；单节点执行时视为配置读取。
+  constantExecutor('mt-loop', 'done'),
+  constantExecutor('loop', 'done'),
+  // 循环体的起止标记：容器自动插入，执行时只做透传。
+  constantExecutor('block-start', 'out'),
+  constantExecutor('block-end', 'done'),
+  { type: 'mt-action', execute: executeActionNode },
+  { type: 'mt-condition', execute: executeConditionNode },
+  { type: 'condition', execute: executeConditionNode },
+  { type: 'http', execute: executeUnsupported },
+  { type: 'code', execute: executeUnsupported },
+  { type: 'llm', execute: executeUnsupported },
+  { type: 'variable', execute: executeUnsupported },
+]
+
+const EXECUTORS: ReadonlyMap<NodeType, NodeExecutor> = new Map(
+  EXECUTOR_LIST.map((executor) => [executor.type, executor]),
+)
+
+/**
+ * 尚未实现的节点：明确报错，不静默当作成功。
+ *
+ * 静默成功会让用户以为流程跑通了，实际什么都没做——比报错难排查得多。
+ */
+async function executeUnsupported({ node }: NodeExecutorContext): Promise<NodeResult> {
+  return { port: 'out', reason: `节点类型「${node.type}」尚未实现执行器` }
+}
+
 /**
  * 执行单个节点，返回它选择的端口。
  *
@@ -181,160 +257,218 @@ export async function executeNode(
   node: FlowNode,
   runtime: GraphRuntime,
 ): Promise<NodeResult> {
-  switch (node.type) {
-    case 'start':
-      return { port: 'out' }
-    case 'end':
-      return { port: 'done' }
-    case 'mt-action':
-      return executeActionNode(ctx, node, runtime)
-    case 'mt-condition':
-      return executeConditionNode(ctx, node, runtime)
-    case 'mt-loop':
-    case 'loop':
-      // 容器式循环由 runLoopContainer 处理；单节点执行时视为配置读取
-      return { port: 'done' }
+  const executor = EXECUTORS.get(node.type)
+  if (!executor) {
+    throw new FlowGraphError(`节点「${node.id}」的类型「${node.type}」没有执行器`, node.id)
   }
+  const inputs = parseNodeInputs(node.data.inputsValues, {
+    params: ctx.flowParams,
+    outputs: runtime.outputs ?? new Map(),
+  })
+  return executor.execute({ ctx, node, runtime, inputs })
 }
 
 /** 执行动作节点。 */
-async function executeActionNode(
-  ctx: StepContext,
-  node: FlowNode,
-  runtime: GraphRuntime,
-): Promise<NodeResult> {
-  const config = node.data as unknown as ActionNodeConfig | undefined
-  if (!config) return { port: 'failure', reason: `动作节点「${node.data.title}」缺少配置` }
+async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult> {
+  const { ctx, node, runtime, inputs } = input
+  const title = node.data.title ?? node.id
 
   // ① 页面前置检查（不符走 mismatch）
+  const requires = listInput(inputs, 'requires')
   const page = await currentPage(ctx, runtime.pages)
-  const requires = config.requires ?? []
   if (requires.length > 0 && !requires.includes(page)) {
     return { port: 'mismatch', reason: `当前页面是 ${page}，期望 ${requires.join('/')}` }
   }
 
-  // ② 执行方式缺失：配置写漏了，直接判失败（不能让异常冒出去）
-  if (!config.act) {
-    return { port: 'failure', reason: `动作节点「${node.data.title}」缺少 act（执行方式）` }
-  }
+  // ② 执行方式（做什么）缺失：配置写漏了，直接判失败
+  const kind = strInput(inputs, 'act.kind')
+  if (!kind) return { port: 'failure', reason: `动作节点「${title}」缺少执行方式（做什么）` }
+
+  const settle = settleOf(inputs)
 
   // ③ 自定义动作（不需要定位）
-  if (config.act.kind === 'custom') {
-    const run = runtime.actions?.[config.act.name]
-    if (!run) return { port: 'failure', reason: `未注册自定义动作：${config.act.name}` }
+  if (kind === 'custom') {
+    const name = strInput(inputs, 'act.name')
+    const run = runtime.actions?.[name]
+    if (!run) return { port: 'failure', reason: `未注册自定义动作：${name}` }
     try {
       await run(ctx)
     } catch (error) {
       return { port: 'failure', reason: error instanceof Error ? error.message : String(error) }
     }
-    if (config.settle) await sleepRandom(ctx, config.settle[0], config.settle[1])
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
     return { port: 'success' }
   }
 
   // ④ 不需要定位的动作
-  if (config.act.kind === 'back') {
+  if (kind === 'back') {
     await ctx.device.back(ctx.serial)
-    if (config.settle) await sleepRandom(ctx, config.settle[0], config.settle[1])
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
     return { port: 'success' }
   }
-  if (config.act.kind === 'openUri') {
-    await ctx.device.openUri(ctx.serial, config.act.uri)
-    if (config.settle) await sleepRandom(ctx, config.settle[0], config.settle[1])
+  if (kind === 'openUri') {
+    const uri = strInput(inputs, 'act.uri')
+    if (!uri) return { port: 'failure', reason: `动作节点「${title}」缺少要打开的链接` }
+    await ctx.device.openUri(ctx.serial, uri)
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
     return { port: 'success' }
   }
-  if (config.act.kind === 'sleep') {
-    await sleepRandom(ctx, config.act.min, config.act.max)
+  if (kind === 'sleep') {
+    await sleepRandom(ctx, numInput(inputs, 'act.min', 1), numInput(inputs, 'act.max', 1))
     return { port: 'success' }
   }
-  if (config.act.kind === 'swipe') {
+  if (kind === 'swipe') {
     const { width, height } = await runtimeScreenSize(ctx)
-    const act = config.act
     await ctx.device.swipe(
       ctx.serial,
-      { x: Math.round(width * act.from.x), y: Math.round(height * act.from.y) },
-      { x: Math.round(width * act.to.x), y: Math.round(height * act.to.y) },
-      act.durationMs,
+      {
+        x: Math.round(width * numInput(inputs, 'act.from.x', 0.5)),
+        y: Math.round(height * numInput(inputs, 'act.from.y', 0.8)),
+      },
+      {
+        x: Math.round(width * numInput(inputs, 'act.to.x', 0.5)),
+        y: Math.round(height * numInput(inputs, 'act.to.y', 0.2)),
+      },
+      numInput(inputs, 'act.durationMs', 300),
     )
-    if (config.settle) await sleepRandom(ctx, config.settle[0], config.settle[1])
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
     return { port: 'success' }
   }
 
   // ⑤ 需要定位的动作（tap / input）
-  if (!config.locate) return { port: 'failure', reason: `动作节点「${node.data.title}」缺少定位配置` }
-  const fallback = config.locate.fallback ? runtime.locators[config.locate.fallback] : undefined
-  const hit = await locateByModel(ctx, ctx.model, {
-    intent: config.locate.intent,
-    fallback,
-    vision: config.locate.vision,
-    strict: config.locate.strict,
-  })
-  if (!hit.ok || !hit.point) {
-    return { port: 'failure', reason: hit.reason ?? `未定位到「${config.locate.intent}」` }
-  }
+  const target = await resolveTarget(input, title)
+  if (!target.ok) return { port: 'failure', reason: target.reason }
 
-  if (config.act.kind === 'tap') {
-    await tapHuman(ctx, hit.point)
-  } else {
-    // input
-    const inputLocator = runtime.locators[config.act.inputLocator]
+  if (kind === 'tap') {
+    await tapHuman(ctx, target.point)
+  } else if (kind === 'input') {
+    const text = strInput(inputs, 'act.text')
+    const inputLocator = runtime.locators[strInput(inputs, 'act.inputLocator')]
     if (!inputLocator) {
-      return { port: 'failure', reason: `未注册定位器：${config.act.inputLocator}` }
+      return { port: 'failure', reason: `未注册定位器：${strInput(inputs, 'act.inputLocator')}` }
     }
-    const text = resolveText(ctx, config.act.text)
-    await tapHuman(ctx, hit.point)
+    await tapHuman(ctx, target.point)
     await sleepRandom(ctx, 0.3, 0.6)
     const snapshot = await ctx.snapshot({ refresh: true })
     const current = inputLocator(snapshot.root)
     if (current?.text) await clearPhoneInput(ctx, current.text)
-    await typeWithVerify(
-      ctx,
-      text,
-      inputLocator,
-      node.data.title ?? node.id,
-      config.act.extras ?? [],
-      config.act.match ?? 'exact',
-    )
+    const extras = listInput(inputs, 'act.extras')
+    const match = strInput(inputs, 'act.match', 'exact') === 'contains' ? 'contains' : 'exact'
+    await typeWithVerify(ctx, text, inputLocator, title, extras, match)
+  } else {
+    return { port: 'failure', reason: `动作节点「${title}」的执行方式「${kind}」未实现` }
   }
 
-  if (config.settle) await sleepRandom(ctx, config.settle[0], config.settle[1])
+  if (settle) await sleepRandom(ctx, settle[0], settle[1])
 
   // ⑥ 校验
-  if (config.verify) {
-    const passed = await verify(ctx, config.verify, runtime)
-    if (!passed) return { port: 'failure', reason: `节点「${node.data.title}」校验未通过` }
+  const verifyConfig = inputs['verify'] as VerifyConfig | undefined
+  if (verifyConfig) {
+    const passed = await verify(ctx, verifyConfig, runtime)
+    if (!passed) return { port: 'failure', reason: `节点「${title}」校验未通过` }
   }
   return { port: 'success' }
 }
 
-/** 执行条件节点。 */
-async function executeConditionNode(
-  ctx: StepContext,
-  node: FlowNode,
-  runtime: GraphRuntime,
-): Promise<NodeResult> {
-  const config = node.data as unknown as ConditionNodeConfig | undefined
-  if (!config) return { port: 'false', reason: `条件节点「${node.data.title}」缺少配置` }
+/** 定位结果：要么拿到坐标，要么带原因失败。 */
+type TargetResult = { ok: true; point: { x: number; y: number } } | { ok: false; reason: string }
 
-  switch (config.kind) {
-    case 'page': {
-      const page = await currentPage(ctx, runtime.pages)
-      return { port: config.expect.includes(page) ? 'true' : 'false' }
+/**
+ * 按「怎么找」解析出屏幕坐标。
+ *
+ * 三种模式：`intent`（模型在 UI 树上找）、`point`（绝对坐标）、
+ * `ratio`（比例坐标，换机型不失效）。
+ *
+ * @param input - 执行器上下文。
+ * @param title - 节点展示名，用于错误信息。
+ */
+async function resolveTarget(input: NodeExecutorContext, title: string): Promise<TargetResult> {
+  const { ctx, runtime, inputs } = input
+  const mode = strInput(inputs, 'locate.mode', 'intent')
+
+  if (mode === 'point') {
+    const x = numInput(inputs, 'locate.point.x', Number.NaN)
+    const y = numInput(inputs, 'locate.point.y', Number.NaN)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return { ok: false, reason: `「${title}」的坐标不合法（需要两个数字）` }
     }
-    case 'exists': {
-      const fallback = config.locate.fallback ? runtime.locators[config.locate.fallback] : undefined
-      const hit = await locateByModel(ctx, ctx.model, {
-        intent: config.locate.intent,
-        fallback,
-        vision: config.locate.vision,
-        strict: config.locate.strict,
-      })
-      return { port: hit.ok ? 'true' : 'false' }
-    }
-    case 'param': {
-      const value = ctx.flowParams[config.key]
-      return { port: value !== undefined && value !== '' ? 'true' : 'false' }
-    }
+    return { ok: true, point: { x: Math.round(x), y: Math.round(y) } }
   }
+
+  if (mode === 'ratio') {
+    const rx = numInput(inputs, 'locate.ratio.x', Number.NaN)
+    const ry = numInput(inputs, 'locate.ratio.y', Number.NaN)
+    if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
+      return { ok: false, reason: `「${title}」的比例坐标不合法（需要两个 0-1 的数字）` }
+    }
+    if (rx < 0 || rx > 1 || ry < 0 || ry > 1) {
+      return { ok: false, reason: `「${title}」的比例坐标必须在 0 到 1 之间` }
+    }
+    const { width, height } = await runtimeScreenSize(ctx)
+    return { ok: true, point: { x: Math.round(width * rx), y: Math.round(height * ry) } }
+  }
+
+  const intent = strInput(inputs, 'locate.intent')
+  if (!intent) return { ok: false, reason: `「${title}」缺少「找什么」（目标描述）` }
+  const fallbackName = strInput(inputs, 'locate.fallback')
+  const hit = await locateByModel(ctx, ctx.model, {
+    intent,
+    fallback: fallbackName ? runtime.locators[fallbackName] : undefined,
+    vision: boolInput(inputs, 'locate.vision', true),
+    strict: boolInput(inputs, 'locate.strict', false),
+  })
+  if (!hit.ok || !hit.point) {
+    return { ok: false, reason: hit.reason ?? `未定位到「${intent}」` }
+  }
+  return { ok: true, point: hit.point }
+}
+
+/**
+ * 取「执行后等待」区间。
+ *
+ * @param inputs - 已求值的输入表。
+ */
+function settleOf(inputs: Readonly<Record<string, unknown>>): [number, number] | undefined {
+  const raw = inputs['settle']
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (Array.isArray(raw) && raw.length === 2) return [Number(raw[0]), Number(raw[1])]
+  const parts = String(raw).split(/[,，]/u).map((v) => Number(v.trim()))
+  if (parts.length === 2 && parts.every((v) => Number.isFinite(v))) return [parts[0]!, parts[1]!]
+  return undefined
+}
+
+async function executeConditionNode(input: NodeExecutorContext): Promise<NodeResult> {
+  const { ctx, node, runtime, inputs } = input
+  const title = node.data.title ?? node.id
+  const kind = strInput(inputs, 'judge.kind')
+  if (!kind) return { port: 'false', reason: `条件节点「${title}」缺少判断类型` }
+
+  if (kind === 'page') {
+    const expect = listInput(inputs, 'judge.expect')
+    const page = await currentPage(ctx, runtime.pages)
+    return { port: expect.includes(page) ? 'true' : 'false' }
+  }
+
+  if (kind === 'exists') {
+    const intent = strInput(inputs, 'judge.locate.intent')
+    if (!intent) return { port: 'false', reason: `条件节点「${title}」缺少「找什么」` }
+    const fallbackName = strInput(inputs, 'judge.locate.fallback')
+    const hit = await locateByModel(ctx, ctx.model, {
+      intent,
+      fallback: fallbackName ? runtime.locators[fallbackName] : undefined,
+      vision: boolInput(inputs, 'judge.locate.vision', true),
+      strict: boolInput(inputs, 'judge.locate.strict', false),
+    })
+    return { port: hit.ok ? 'true' : 'false' }
+  }
+
+  if (kind === 'param') {
+    const key = strInput(inputs, 'judge.key')
+    const value = ctx.flowParams[key]
+    return { port: value !== undefined && value !== '' ? 'true' : 'false' }
+  }
+
+  return { port: 'false', reason: `条件节点「${title}」的判断类型「${kind}」未实现` }
 }
 
 /**
@@ -353,9 +487,14 @@ async function runLoopContainer(
   trail: GraphOutcome['trail'],
   maxSteps: number,
 ): Promise<NodeResult> {
-  const config = node.data.loopFor as LoopNodeConfig | undefined
-  const max = config?.max ?? 1
-  const gap = config?.gap
+  const inputs = parseNodeInputs(node.data.inputsValues, {
+    params: ctx.flowParams,
+    outputs: runtime.outputs ?? new Map(),
+  })
+  const max = numInput(inputs, 'loopFor.max', 1)
+  // gap 是「每轮间隔秒数区间」，画布上一个值同时作用于上下界。
+  const gapSeconds = numInput(inputs, 'loopFor.gap', 0)
+  const gap: [number, number] | undefined = gapSeconds > 0 ? [gapSeconds, gapSeconds] : undefined
   const blocks = node.blocks ?? []
   if (blocks.length === 0) return { port: 'done' }
 
@@ -406,7 +545,7 @@ async function runLoopContainer(
 /** 校验。 */
 async function verify(
   ctx: StepContext,
-  config: NonNullable<ActionNodeConfig['verify']>,
+  config: VerifyConfig,
   runtime: GraphRuntime,
 ): Promise<boolean> {
   switch (config.kind) {
@@ -417,7 +556,7 @@ async function verify(
     case 'exists': {
       const fallback = config.locate.fallback ? runtime.locators[config.locate.fallback] : undefined
       const hit = await locateByModel(ctx, ctx.model, {
-        intent: config.locate.intent,
+        intent: config.locate.intent ?? '',
         fallback,
         vision: config.locate.vision,
         strict: config.locate.strict,
@@ -427,7 +566,7 @@ async function verify(
     case 'gone': {
       const fallback = config.locate.fallback ? runtime.locators[config.locate.fallback] : undefined
       const hit = await locateByModel(ctx, ctx.model, {
-        intent: config.locate.intent,
+        intent: config.locate.intent ?? '',
         fallback,
         vision: config.locate.vision,
         strict: config.locate.strict,

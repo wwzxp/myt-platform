@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PageRegistry } from '../page-guard.ts'
 import { runGraph, executeNode, type GraphRuntime } from './run.ts'
 import { validateFlowGraph, FlowGraphError } from './load.ts'
-import type { FlowEdge, FlowGraph, FlowNode, NodeType } from './types.ts'
+import type { FlowEdge, FlowGraph, FlowNode, FlowValue, NodeType } from './types.ts'
 import type { StepContext } from '@myt/flow'
 
 /**
@@ -79,17 +79,57 @@ const KIND_TO_TYPE: Record<string, NodeType> = {
   end: 'end',
 }
 
+/**
+ * 把旧式扁平配置转成新形状的 `inputsValues`。
+ *
+ * 等价于 `scripts/migrate-workflow-nodes.ts` 的转换。测试关心的是**路由行为**，
+ * 不是数据形状——用这个辅助保持用例可读。
+ *
+ * @param config - 旧式配置（`{ requires, act:{...} }` 等）。
+ * @param type - 节点类型，决定字段怎么铺开。
+ */
+function toInputs(config: Record<string, unknown>, type: NodeType): Record<string, FlowValue> {
+  const out: Record<string, FlowValue> = {}
+  const put = (key: string, content: unknown): void => {
+    if (content === undefined || content === null || content === '') return
+    out[key] = { type: 'constant', content }
+  }
+  if (type === 'mt-action') {
+    const act = config['act'] as Record<string, unknown> | undefined
+    if (act) for (const [k, v] of Object.entries(act)) put(`act.${k}`, v)
+    const locate = config['locate'] as Record<string, unknown> | undefined
+    if (locate) for (const [k, v] of Object.entries(locate)) put(`locate.${k}`, v)
+    const requires = config['requires']
+    if (Array.isArray(requires) && requires.length > 0) put('requires', requires.join(','))
+    const settle = config['settle']
+    if (Array.isArray(settle)) put('settle', settle.join(','))
+    if (config['verify']) out['verify'] = { type: 'constant', content: config['verify'] }
+  }
+  if (type === 'mt-condition') {
+    put('judge.kind', config['kind'])
+    put('judge.key', config['key'])
+    const expect = config['expect']
+    if (Array.isArray(expect)) put('judge.expect', expect.join(','))
+  }
+  if (type === 'mt-loop' || type === 'loop') {
+    const loopFor = config['loopFor'] as Record<string, unknown> | undefined
+    put('loopFor.max', loopFor ? loopFor['max'] : config['max'])
+  }
+  return out
+}
+
 function node(
   id: string,
   kind: 'start' | 'action' | 'condition' | 'loop' | 'end',
   config?: Record<string, unknown>,
   blocks?: FlowNode[],
 ): FlowNode {
+  const type = KIND_TO_TYPE[kind]!
   return {
     id,
-    type: KIND_TO_TYPE[kind]!,
+    type,
     meta: { position: { x: 0, y: 0 } },
-    data: { title: id, ...(config ?? {}) },
+    data: { title: id, inputsValues: toInputs(config ?? {}, type) },
     ...(blocks === undefined ? {} : { blocks }),
   }
 }

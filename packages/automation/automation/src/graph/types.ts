@@ -31,18 +31,33 @@ export type PortId =
   | 'done'
 
 /**
- * 节点类型（与画布 JSON 的 `node.type` 完全一致）。
+ * 可执行节点类型（与画布 `node.type` 完全一致）。
  *
  * **统一格式**：磁盘上只有一种 JSON（画布格式），引擎直接读它，
  * 不再有「我们的格式 → 画布格式」的转换层。
+ *
+ * 画布能拖的节点必须都在这里——否则拖进来就报「type 非法」。
+ * `group` / `comment` 不在列：纯视觉节点，不进图。
  */
 export type NodeType =
   | 'start'
   | 'mt-action'
   | 'mt-condition'
   | 'mt-loop'
-  /** flowgram 内置的循环容器（兼容 demo 自带节点） */
+  /** flowgram 内置循环容器（数组遍历）。 */
   | 'loop'
+  /** flowgram 内置条件节点（纯变量比较）。 */
+  | 'condition'
+  | 'http'
+  | 'code'
+  | 'llm'
+  | 'variable'
+  /**
+   * 循环体的起止标记：由 `mt-loop` / `loop` 的容器自动插入，**不该手动拖**。
+   * 面板里隐藏，但引擎必须认识——否则跑循环体时报「没有执行器」。
+   */
+  | 'block-start'
+  | 'block-end'
   | 'end'
 
 /** 每种节点允许的出口端口。 */
@@ -50,8 +65,16 @@ export const PORTS_OF_TYPE: Record<NodeType, readonly PortId[]> = {
   start: ['out'],
   'mt-action': ['success', 'failure', 'mismatch'],
   'mt-condition': ['true', 'false'],
+  // 循环体在 `blocks` 里，不走端口；只有退出后的 `done`。
   'mt-loop': ['done'],
-  loop: ['body', 'done'],
+  loop: ['done'],
+  condition: ['true', 'false'],
+  http: ['out'],
+  code: ['out'],
+  llm: ['out'],
+  variable: ['out'],
+  'block-start': ['out'],
+  'block-end': ['done'],
   end: [],
 }
 
@@ -76,13 +99,64 @@ export interface CanvasPosition {
   y: number
 }
 
+/**
+ * 一个输入值的来源（与 flowgram demo 的 `FlowValue` 同构）。
+ *
+ * 三种来源显式区分，消除「这段文字是字面量还是参数名」的歧义——
+ * 旧的 `resolveText` 只能做 `ctx.flowParams[key]` 查表，分不清两者。
+ */
+export type FlowValue =
+  /**
+   * 常量。`content` 可以是任意 JSON 值——字符串、数字、布尔，
+   * 也可以是整块结构化配置（如 `verify` 校验规则）。
+   */
+  | { type: 'constant'; content: unknown }
+  /** 引用上游节点的输出，如 `['submitNote', 'ok']`。 */
+  | { type: 'ref'; content: readonly string[] }
+  /** 模板插值，如 `'点击{{keyword}}'`。 */
+  | { type: 'template'; content: string }
+
+/**
+ * 节点数据的统一形状（与 flowgram demo 同构）。
+ *
+ * 所有节点——包括自研的 `mt-*`——都用这个形状，这样变量系统与表单
+ * 渲染只有一套实现。
+ */
+export interface NodeData {
+  /** 中文展示名，给用户看。 */
+  title?: string
+  /** 输入值：常量 / 引用 / 模板。执行前由引擎统一求值。 */
+  inputsValues?: Record<string, FlowValue>
+  /** 输入声明（JSON Schema）：驱动变量面板与校验。 */
+  inputs?: { type: 'object'; properties: Record<string, unknown> }
+  /** 输出声明（JSON Schema）：下游节点据此引用本节点产出。 */
+  outputs?: { type: 'object'; properties: Record<string, unknown> }
+  /** 兼容旧模板：已迁移的节点不再产生这些字段。 */
+  [key: string]: unknown
+}
+
+/** 定位模式。 */
+export type LocateMode =
+  /** 自然语言描述，模型在 UI 树上定位。能见到 UI 树的场景都用它。 */
+  | 'intent'
+  /** 绝对坐标。UI 树看不到的元素（Canvas / WebView / 游戏画面）用它。 */
+  | 'point'
+  /** 比例坐标（0-1）。同 point 但换机型不失效，**优先选它**。 */
+  | 'ratio'
+
 /** 定位方式。 */
 export interface LocateConfig {
+  /** 用哪种定位；缺省按 `intent`。 */
+  mode?: LocateMode
   /**
-   * 意图描述。会被直接送给模型，写成界面上能看到的**精确文字**
-   * （「输入标题」而不是「标题」——后者会选到「一键排版」，实测）。
+   * 意图描述（`mode: 'intent'`）。会被直接送给模型，写成界面上能看到的
+   * **精确文字**（「输入标题」而不是「标题」——后者会选到「一键排版」，实测）。
    */
-  intent: string
+  intent?: string
+  /** 绝对坐标（`mode: 'point'`）。 */
+  point?: { x: number; y: number }
+  /** 比例坐标（`mode: 'ratio'`），取值 0-1。 */
+  ratio?: { x: number; y: number }
   /** 确定性兜底：模型不可用时用旧路径。JSON 里用定位器名，运行时查表。 */
   fallback?: string
   /** 是否启用视觉兜底，默认开启。 */
@@ -196,31 +270,11 @@ export interface FlowNode {
   /**
    * 业务数据。
    *
-   * - `title`：中文展示名
-   * - 动作节点：`locate` / `act` / `verify` / `requires` / `settle`
-   * - 条件节点：`judge`
-   * - 循环节点：`loopFor`
+   * 形状统一为 `NodeData`（`title` / `inputsValues` / `inputs` / `outputs`），
+   * 与画布其它节点一致。旧的裸字段（`locate` / `act` / `judge` / `loopFor`）
+   * 已迁进 `inputsValues`，由 `parseNodeInputs` 求值后得到。
    */
-  data: {
-    /** 中文展示名（界面文案规范）。 */
-    title?: string
-    /** 执行前必须处于这些页面之一。 */
-    requires?: readonly string[]
-    /** 定位方式。 */
-    locate?: LocateConfig
-    /** 执行方式。 */
-    act?: ActConfig
-    /** 校验方式。 */
-    verify?: VerifyConfig
-    /** 执行后额外等待（秒）。 */
-    settle?: readonly [number, number]
-    /** 条件判断。 */
-    judge?: ConditionNodeConfig
-    /** 循环参数。 */
-    loopFor?: LoopNodeConfig
-    /** 其它业务字段，原样透传。 */
-    [key: string]: unknown
-  }
+  data: NodeData
   /**
    * 子节点（仅循环容器使用）。
    *

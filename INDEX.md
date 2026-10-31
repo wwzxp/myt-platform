@@ -54,6 +54,8 @@
 | `packages/core/system-api/` | 系统类 HTTP（`@myt/system-api`）：`/api/health`、`/api/data-dir`、`/api/hosts`、`/api/containers`、`/api/flows` |
 | `packages/device/device-api/` | 设备类 HTTP（`@myt/device-api`）：`/api/devices`、`/api/actions/{start,stop}`、`/api/device/{connect,dump,tap}` |
 | `packages/flow/xhs-api/` | 短信平台 HTTP（`@myt/xhs-api`）：`/api/herosms/{balance,countries,prices,activations,cancel}`；API Key 由请求体传入不落盘 |
+| `packages/flow/xhs-pack/` | 业务包装配（`@myt/xhs-pack`，服务 `ctx.xhsPack`）：注册 `xhsDevicePack`/`xhsPack`/`xhsPublishPack` 三个流程包到 `ctx.flows`；暴露 15 个 UI 动作与链配方；提供识图（LLM）与 S5 代理两个宿主能力 |
+| `packages/flow/xhs-login/src/chain-runner.ts` | 链执行器：`runChain` 递归跑完整条链（登录 → 改资料 → 绑定 → 关注 → 收尾），成功按配方推进、失败终止；`buildParams` 拼参数、`loginParamsOf` 处理 HeroSMS 分支 |
 | `packages/flow/xhs-login/` | 登录域（`@myt/xhs-login`）：11 个 `/api/tabs/login/*` + `/api/devices/models` + `/api/accounts/import`；`src/tabs/` 是 11 个纯函数模块，`src/batch-login.ts` 是编排层，`src/pre-step.ts` 是前置动作 |
 | `packages/core/task-api/` | flowgram 运行时（`@myt/task-api`）：`/api/task/{validate,run,report,result,cancel}` + `/api/accounts/parse-sms` |
 | `packages/core/runs-api/` | 运行记录（`@myt/runs-api`）：`/api/runs`（GET 列表/POST 创建）、`/api/runs/<id>` |
@@ -87,7 +89,8 @@
 | `@myt/system-api` | 平台自身信息，不认识业务 | 见目录结构 |
 | `@myt/device-api` | 设备清单与容器生命周期；`defaultHost` 由配置注入，不猜宿主 | 见目录结构 |
 | `@myt/xhs-api` | 短信平台查询；凭据不落盘 | 见目录结构 |
-| `@myt/xhs-login` | 登录域三层：`tabs/`（纯函数）、`batch-login.ts`（编排）、`index.ts`（HTTP 薄封装） | 见目录结构 |
+| `@myt/xhs-login` | 登录域四层：`tabs/`（纯函数）、`chain-runner.ts`（链执行）、`batch-login.ts`（批调度）、`index.ts`（HTTP 薄封装） | 见目录结构 |
+| `@myt/xhs-pack` | 流程注册与业务数据聚合；不认识 HTTP，不执行流程 | `ctx.xhsPack.actions` / `.chain` / `.packs` |
 | `@myt/task-api` | flowgram 5 个运行时端点 + 账号文本解析 | 见目录结构 |
 | `@myt/runs-api` | 运行记录读写；同设备并发创建返回 409 | 见目录结构 |
 | `@myt/ui`（html） | 设备农场：宿主下拉、统计卡、状态筛选、搜索、容器表、启动/停止、跑探测流程 | 调 `/api/*` |
@@ -102,6 +105,10 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-01 07:00:00 | 新增 | `packages/flow/xhs-login/src/chain-runner.ts` | 链执行器：补回迁移遗漏的 `runChainStep`，登录后能按配方推进改资料→绑定→关注→收尾 |
+| 2026-11-01 07:00:00 | 新增 | `packages/flow/xhs-pack/` | 业务包装配：补回迁移遗漏的流程注册（此前 `ctx.flows` 为空，批量登录静默失败） |
+| 2026-11-01 07:00:00 | bug修复 | `packages/core/system-api/` | `hosts` 读 `MYT_HOSTS`；此前 `/api/hosts` 恒返回空数组 |
+| 2026-11-01 07:00:00 | bug修复 | `packages/device/device-adb/` `packages/core/workflows/` | 配置回落环境变量（`MYT_ADB_PATH` / `MYT_ADB_KEYBOARD_APK` / `MYT_DATA_DIR`） |
 | 2026-11-01 01:10:00 | 删除 | `packages/app/kernel/` | **删除 1652 行单体内核**：40 个路由全部迁到 6 个领域插件包，`main.cjs` 改指 `desktop-host` |
 | 2026-11-01 01:10:00 | 新增 | `packages/app/desktop-host/` | 宿主入口：读 `MYT_*` env → `runProfile` 装配 profile → 上报端口；业务逻辑为零 |
 | 2026-11-01 01:00:00 | 新增 | `packages/core/runs-api/` | 运行记录 3 条路由；修 dsh prefix 路由不能带尾部斜杠的坑 |

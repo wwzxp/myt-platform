@@ -11,13 +11,10 @@ import {
 } from '../locators/publish-locators.ts'
 import {
   runAction,
-  runActions,
   assertPage,
   currentPage,
   waitForPage,
-  askPageYesNo,
   sleepRandom,
-  tapHuman,
   PageRegistry,
 } from '@myt/automation'
 import type { ActionSpec } from '@myt/automation'

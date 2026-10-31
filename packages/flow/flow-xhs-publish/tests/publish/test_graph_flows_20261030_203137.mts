@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
+import { readFile } from 'node:fs/promises'
 import { AdbDeviceControl } from '../../../../device/device-adb/src/index.ts'
 import { loadFlowGraph } from '../../../../automation/automation/src/graph/load.ts'
 import { runXhsGraph } from '../../src/graph-runtime.ts'
@@ -20,12 +21,26 @@ const model=Object.assign(async(prompt:string)=>{
   return (d.choices?.[0]?.message?.content??'').trim()
 }})
 
-const id=process.argv[2]!
-const params:Record<string,string> = id==='xhs.publish.text'
+/**
+ * 真机跑图。
+ *
+ * 图来自**工作流库**（`data/workflows/`），配置（app/maxSteps）在图的
+ * `globalVariable` 里——与画布保存的格式一致，不再有第二份数据源。
+ *
+ * 用法：`npx tsx <本文件> 发布文字笔记`
+ */
+const name=process.argv[2]!
+const params:Record<string,string> = name==='发布文字笔记'
   ? { title:'文字笔记测试标题', body:'这是一条自动化测试的文字笔记正文', topics:'测试,自动化', textContent:'文字笔记的文字内容', fbMode:'save' }
   : { title:'长文笔记测试标题', body:'这是一条自动化测试的长文笔记正文，内容要长一些。', topics:'测试,自动化', fbMode:'save' }
 
-const graph=await loadFlowGraph(`F:/ai/myt_tools/data/flows/${id}.json`)
+const raw=JSON.parse(await readFile(`F:/ai/myt_tools/data/workflows/${name}.json`,'utf8'))
+// 把 globalVariable 里的 default 提到顶层 data（引擎需要的形态）
+const cfg=raw.globalVariable?.properties
+const graph=await loadFlowGraph({
+  ...raw,
+  data:{ app: cfg?.app?.default, maxSteps: cfg?.maxSteps?.default },
+})
 console.log(`图 ${graph.id}：${graph.nodes.length} 节点 / ${graph.edges.length} 边`)
 const sctx:any={
   serial,deviceId:'dev',runId:'graph',device,runs:{stepSucceeded:()=>{}},

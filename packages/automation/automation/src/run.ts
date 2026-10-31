@@ -9,7 +9,7 @@ import {
   tapHuman,
   typeWithVerify,
 } from './actions.ts'
-import type { ActionSpec, ActionResult, LocateSpec, VerifySpec } from './types.ts'
+import type { ActionSpec, ActionResult, LocateSpec } from './types.ts'
 export type { ActionResult } from './types.ts'
 
 /**

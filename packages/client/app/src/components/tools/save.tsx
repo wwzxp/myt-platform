@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { useClientContext, FlowNodeEntity } from '@flowgram.ai/free-layout-editor';
+import { useWorkflowContext } from '../../context/workflow-context';
 import { Button, Badge } from '@douyinfe/semi-ui';
 
 export function Save(props: { disabled: boolean }) {
@@ -21,11 +22,14 @@ export function Save(props: { disabled: boolean }) {
   /**
    * Validate all node and Save
    */
+  const workflow = useWorkflowContext();
+
   const onSave = useCallback(async () => {
     const allForms = clientContext.document.getAllNodes().map((node) => node.form);
     await Promise.all(allForms.map(async (form) => form?.validate()));
-    console.log('>>>>> save data: ', clientContext.document.toJSON());
-  }, [clientContext]);
+    if (!workflow) throw new Error('保存失败：不在流程编辑器中');
+    await workflow.save();
+  }, [workflow]);
 
   /**
    * Listen single node validate

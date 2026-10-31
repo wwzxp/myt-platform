@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
+import { readFile } from 'node:fs/promises'
 import { AdbDeviceControl } from '../../../../device/device-adb/src/index.ts'
 import { loadFlowGraph } from '../../../../automation/automation/src/graph/load.ts'
 import { runXhsGraph } from '../../src/graph-runtime.ts'
@@ -10,7 +11,10 @@ const images=readdirSync(dir).filter(f=>f.endsWith('.png')).sort((a,b)=>parseInt
 const ctx=new Context()
 const device=new AdbDeviceControl(ctx,{adbPath:'F:/ai/myt_tools/packages/app/desktop/dist/win-unpacked/resources/tools/adb.exe'})
 const serial='127.0.0.1:5565'
-const graph=await loadFlowGraph('F:/ai/myt_tools/data/flows/xhs.publish.image.json')
+// 图来自工作流库；配置在 globalVariable 里
+const raw=JSON.parse(await readFile('F:/ai/myt_tools/data/workflows/发布图文笔记.json','utf8'))
+const cfg=raw.globalVariable?.properties
+const graph=await loadFlowGraph({ ...raw, data:{ app: cfg?.app?.default, maxSteps: cfg?.maxSteps?.default } })
 console.log(`图 ${graph.id}：${graph.nodes.length} 节点 / ${graph.edges.length} 边`)
 
 const model=Object.assign(async(prompt:string)=>{

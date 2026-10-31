@@ -1,5 +1,5 @@
 import type { UiNode } from '@myt/device'
-import { nodeAtPath, type BoundedPoint, type Point } from '../locators/paths.ts'
+import { nodeAtPath, type Point } from '../locators/paths.ts'
 
 /**
  * 小红书界面定位函数（**1:1 移植**自 auto_login.py）。

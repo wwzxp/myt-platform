@@ -11,9 +11,9 @@ export type StepStatus = 'running' | 'succeeded' | 'failed' | 'skipped'
 /** 一次运行的事件；追加写入，不修改（runtime-and-storage §2）。 */
 export type RunEvent =
   | { type: 'run/started'; runId: string; ts: number; flowId: string; deviceId: string; serial: string }
-  | { type: 'run/finished'; runId: string; ts: number; status: RunStatus; steps: number; failedStep?: string }
+  | { type: 'run/finished'; runId: string; ts: number; status: RunStatus; steps: number; failedStep?: string | undefined }
   | { type: 'step/started'; runId: string; ts: number; stepId: string; title: string }
-  | { type: 'step/succeeded'; runId: string; ts: number; stepId: string; durationMs: number; note?: string }
+  | { type: 'step/succeeded'; runId: string; ts: number; stepId: string; durationMs: number; note?: string | undefined }
   | {
       type: 'step/failed'
       runId: string
@@ -33,7 +33,7 @@ export type RunEvent =
     }
   | { type: 'locator/fallback'; runId: string; ts: number; stepId: string; matchedBy: string }
   | { type: 'assert/failed'; runId: string; ts: number; stepId: string; message: string }
-  | { type: 'artifact'; runId: string; ts: number; stepId?: string; kind: 'screenshot' | 'dump'; sha256: string }
+  | { type: 'artifact'; runId: string; ts: number; stepId?: string | undefined; kind: 'screenshot' | 'dump'; sha256: string }
 
 export interface RunRecord {
   runId: string
@@ -215,3 +215,6 @@ declare module '@deepseek-ai/cordis' {
     runs: RunStore
   }
 }
+
+/** Cordis Loader 按包名导入时要求默认导出。 */
+export default RunStore

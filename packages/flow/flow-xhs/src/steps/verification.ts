@@ -22,10 +22,10 @@ export type SmsProvider = 'legacy' | 'herosms'
 export interface VerificationCodeSource {
   provider: SmsProvider
   /** legacy：验证码网页 URL。 */
-  url?: string
+  url?: string | undefined
   /** herosms：激活 id 与客户端钩子。 */
-  activationId?: string
-  getStatus?: (activationId: string) => Promise<{ status: string; code?: string }>
+  activationId?: string | undefined
+  getStatus?: ((activationId: string) => Promise<{ status: string; code?: string | undefined }>) | undefined
 }
 
 /** 从 HTML 中提取第一个 6 位数字；先剥离 script/style（旧实现同样做法）。 */

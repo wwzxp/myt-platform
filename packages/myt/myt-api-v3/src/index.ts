@@ -62,15 +62,15 @@ export interface V3HostInfo {
 export interface SwitchModelOptions {
   name: string
   /** 线上机型 id。 */
-  modelId?: string | number
+  modelId?: string | number | undefined
   /** 本地机型名称。 */
-  localModel?: string
+  localModel?: string | undefined
   /** 本地静态机型名称。 */
-  modelStatic?: string
-  latitude?: number
-  longitude?: number
-  countryCode?: string
-  timeoutMs?: number
+  modelStatic?: string | undefined
+  latitude?: number | undefined
+  longitude?: number | undefined
+  countryCode?: string | undefined
+  timeoutMs?: number | undefined | undefined
 }
 
 /**
@@ -107,7 +107,7 @@ export class MytApiV3 extends Service {
 
   constructor(
     ctx: ConstructorParameters<typeof Service>[0],
-    config: { port?: number; timeoutMs?: number } = {},
+    config: { port?: number; timeoutMs?: number | undefined } = {},
   ) {
     super(ctx, 'mytHostV3')
     this.defaultPort = config.port ?? V3_DEFAULT_PORT
@@ -123,7 +123,7 @@ export class MytApiV3 extends Service {
     host: string,
     path: string,
     params: Record<string, string> = {},
-    timeoutMs?: number,
+    timeoutMs?: number | undefined | undefined,
   ): Promise<{ code: number; message?: string; data?: T }> {
     const url = new URL(`${this.baseUrl(host)}${path}`)
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
@@ -139,7 +139,7 @@ export class MytApiV3 extends Service {
     host: string,
     path: string,
     body: Record<string, unknown>,
-    timeoutMs?: number,
+    timeoutMs?: number | undefined | undefined,
   ): Promise<{ code: number; message?: string; data?: T }> {
     const res = await fetch(`${this.baseUrl(host)}${path}`, {
       method: 'POST',
@@ -161,7 +161,7 @@ export class MytApiV3 extends Service {
   async listAndroids(
     host: string,
     filter: { name?: string; running?: boolean; indexNum?: number } = {},
-    timeoutMs?: number,
+    timeoutMs?: number | undefined | undefined,
   ): Promise<V3Android[]> {
     const params: Record<string, string> = {}
     if (filter.name) params['name'] = filter.name
@@ -174,18 +174,18 @@ export class MytApiV3 extends Service {
   }
 
   /** 只返回运行中的云机（旧 `get_running_android`）。 */
-  async listRunningAndroids(host: string, timeoutMs?: number): Promise<V3Android[]> {
+  async listRunningAndroids(host: string, timeoutMs?: number | undefined): Promise<V3Android[]> {
     return this.listAndroids(host, { running: true }, timeoutMs)
   }
 
   /** 启动云机（旧 `start_android`）；返回 `code === 0`。 */
-  async startAndroid(host: string, name: string, timeoutMs?: number): Promise<boolean> {
+  async startAndroid(host: string, name: string, timeoutMs?: number | undefined): Promise<boolean> {
     const body = await this.postEnvelope<unknown>(host, '/android/start', { name }, timeoutMs)
     return body.code === 0
   }
 
   /** 关闭云机（旧 `stop_android`）；返回 `code === 0`。 */
-  async stopAndroid(host: string, name: string, timeoutMs?: number): Promise<boolean> {
+  async stopAndroid(host: string, name: string, timeoutMs?: number | undefined): Promise<boolean> {
     const body = await this.postEnvelope<unknown>(host, '/android/stop', { name }, timeoutMs)
     return body.code === 0
   }
@@ -196,7 +196,7 @@ export class MytApiV3 extends Service {
    * 一次请求拿到 ADB 地址、容器列表、地址到名称映射——
    * 旧版用它替代 v2 需要多次调用的开销。
    */
-  async hostInfo(host: string, timeoutMs?: number): Promise<V3HostInfo> {
+  async hostInfo(host: string, timeoutMs?: number | undefined): Promise<V3HostInfo> {
     const list = await this.listAndroids(host, {}, timeoutMs)
     const adbAddrs: string[] = []
     const containers: V3Container[] = []
@@ -232,7 +232,7 @@ export class MytApiV3 extends Service {
   }
 
   /** ADB 地址列表（旧 `get_adb_addrs`）。 */
-  async adbAddrs(host: string, onlyRunning = true, timeoutMs?: number): Promise<string[]> {
+  async adbAddrs(host: string, onlyRunning: boolean = true, timeoutMs?: number | undefined): Promise<string[]> {
     const list = await this.listAndroids(host, {}, timeoutMs)
     const result: string[] = []
     for (const item of list) {
@@ -247,7 +247,7 @@ export class MytApiV3 extends Service {
   /** 线上机型列表（旧 `get_phone_model_list`）。`data.list` 每项含 `id` 与 `android_version`。 */
   async phoneModelList(
     host: string,
-    timeoutMs?: number,
+    timeoutMs?: number | undefined | undefined,
   ): Promise<Array<Record<string, unknown>>> {
     const body = await this.getEnvelope<{ list?: Array<Record<string, unknown>> }>(
       host,
@@ -299,7 +299,7 @@ export class MytApiV3 extends Service {
     host: string,
     name: string,
     androidVersion: string,
-    timeoutMs?: number,
+    timeoutMs?: number | undefined | undefined,
   ): Promise<{ ok: boolean; model: Record<string, unknown> | null }> {
     const models = await this.phoneModelList(host, timeoutMs)
     const wanted = String(androidVersion)
@@ -324,3 +324,6 @@ declare module '@deepseek-ai/cordis' {
     mytHostV3: MytApiV3
   }
 }
+
+/** Cordis Loader 按包名导入时要求默认导出。 */
+export default MytApiV3

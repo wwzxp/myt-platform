@@ -3,13 +3,25 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "main": "src/index.ts",
+  "main": "lib/index.js",
   "exports": {
-    ".": "./src/index.ts",
-    "./pack": "./src/pack.ts"
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./pack": "./src/pack.ts",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
   },
   "dependencies": {
     "@myt/device": "workspace:*",
     "@myt/flow": "workspace:*"
-  }
+  },
+  "types": "lib/types/index.d.ts",
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts",
+    "src"
+  ]
 }

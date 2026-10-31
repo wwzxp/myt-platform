@@ -44,9 +44,21 @@ export async function loadLlmConfig(configFile: string): Promise<LlmConfig> {
  * 注意：`apiKey` 为空字符串表示「明确清空」，`undefined` 表示「保持不变」——
  * 与旧 `save_llm_config` 一致（旧实现是整份覆盖，前端留空即不改）。
  */
+/**
+ * 部分更新配置。
+ *
+ * 每个字段都显式允许 `undefined`：调用方常用「未提供就保持原值」的语义，
+ * 在 `exactOptionalPropertyTypes` 下 `Partial<T>` 不接受显式 undefined。
+ */
+export interface LlmConfigPatch {
+  baseUrl?: string | undefined
+  model?: string | undefined
+  apiKey?: string | undefined
+}
+
 export async function saveLlmConfig(
   configFile: string,
-  config: Partial<LlmConfig>,
+  config: LlmConfigPatch,
 ): Promise<LlmConfig> {
   const current = await loadLlmConfig(configFile)
   const next: LlmConfig = {

@@ -130,3 +130,6 @@ declare module '@deepseek-ai/cordis' {
     devices: DeviceRegistry
   }
 }
+
+/** Cordis Loader 按包名导入时要求默认导出。 */
+export default DeviceRegistry

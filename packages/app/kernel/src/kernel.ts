@@ -1,11 +1,13 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { DeviceRegistry } from '@myt/devices'
 import { AdbDeviceControl } from '@myt/device-adb'
 import { FlowRegistry, FlowRunner, createStepContext } from '@myt/flow'
+import { WorkflowStore } from '@myt/workflows'
+import { WorkflowApi } from '@myt/workflow-api'
+import { WebServer } from '@myt/webserver'
 import { xhsPack } from '@myt/flow-xhs/pack'
 import { xhsPublishPack } from '@myt/flow-xhs-publish/pack'
 import { xhsDevicePack } from '@myt/flow-xhs-device/pack'
@@ -28,7 +30,6 @@ import {
   actionLabel,
   advanceChain,
   beginChain,
-  type ChainRun,
   type ChainState,
   type ChainStep,
 } from './tabs/login-chain.ts'
@@ -54,31 +55,31 @@ export interface KernelOptions {
   /** 监听端口；壳会先探测可用端口再传入。 */
   port: number
   /** 监听地址；默认仅本机。 */
-  host?: string
+  host?: string | undefined
   /** MYT SDK 网关基址。 */
-  sdkBase?: string
+  sdkBase?: string | undefined
   /** 宿主 IP 列表。 */
   hosts: string[]
   /** 设备状态文件路径。 */
   stateFile: string
   /** 大模型配置文件路径（与设备状态分开，避免互相覆盖）。 */
-  llmConfigFile?: string
+  llmConfigFile?: string | undefined
   /** 机型库 JSON 路径（旧 `static/devices.json`）；缺省时新机配置不可用。 */
-  devicesJson?: string
+  devicesJson?: string | undefined
   /** 前端静态目录；缺省时只提供 API。 */
-  uiDir?: string
+  uiDir?: string | undefined
   /** adb 可执行文件路径；缺省取 PATH。 */
-  adbPath?: string
+  adbPath?: string | undefined
   /** yadb 本地文件路径；缺省取仓库内 apk/yadb。 */
-  yadbPath?: string
+  yadbPath?: string | undefined
   /** ADBKeyboard.apk 本地路径；设备未安装输入法时使用。 */
-  adbKeyboardApk?: string
+  adbKeyboardApk?: string | undefined
   /** HeroSMS 客户端；提供后可用 `activationId` 参数走 HeroSMS 取码。 */
   heroSmsClient?: {
     getStatus: (activationId: string) => Promise<{ status: string; code?: string }>
   }
   /** 拟人化随机种子（调试用）。 */
-  seed?: number
+  seed?: number | undefined
   /** 就绪回调：HTTP 已在监听。 */
   onReady?: (info: { port: number; host: string }) => void
 }
@@ -147,6 +148,12 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
   const hosts = options.hosts
 
   const ctx = new Context()
+  // HTTP 路由服务：插件自己注册路由，内核不再硬编码业务路径。
+  await ctx.plugin(WebServer, {
+    port: options.port,
+    host: listenHost,
+    cors: true,
+  })
   await ctx.plugin(MytApiV2, { baseUrl: sdkBase })
   // v3 客户端：宿主机 8000 端口。当前环境可能没有 v3 宿主，
   // 注册后由能力探测决定是否可用（不在启动时探活，避免拖慢启动）。
@@ -158,6 +165,10 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
   })
   await ctx.plugin(RunStore, {})
   await ctx.plugin(FlowRegistry)
+  // 流程图持久化：一图一文件，文件名即流程名（用户可读、可改、可复制）。
+  await ctx.plugin(WorkflowStore, { dir: join(dirname(options.stateFile), 'workflows') })
+  // 流程图 HTTP 接口：插件自己声明路由，内核不认识 /api/workflows。
+  await ctx.plugin(WorkflowApi)
   // 业务包：内核只 load 包，不认识任何具体流程 id。
   xhsDevicePack.register(ctx.flows, {})
   xhsPack.register(ctx.flows, {
@@ -194,44 +205,6 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
    * 前端 `runtime-plugin` 切 `mode:'server'` 后调的就是这里。
    * 用 `createStepContext` 与步骤引擎共用上下文构造——两套引擎必须看到一致的 `ctx`。
    */
-  /**
-   * 流程库：`data/flows/*.json` 的业务配置（app / maxSteps）。
-   *
-   * 画布上的 schema 只有 `{nodes, edges}`，这些业务知识由内核对端补。
-   * 启动时一次性读入，`validate` 是同步接口，不能临时读盘。
-   */
-  const flowDefaults = new Map<string, { app: unknown; maxSteps: number }>()
-  /** 流程 id → 节点 id 集合，供画布反查。 */
-  const flowNodeIds = new Map<string, Set<string>>()
-  {
-    const flowsDir = fileURLToPath(new URL('../../../../data/flows/', import.meta.url))
-    const { readdirSync, readFileSync } = await import('node:fs')
-    try {
-      for (const file of readdirSync(flowsDir)) {
-        if (!file.endsWith('.json')) continue
-        try {
-          const raw = JSON.parse(readFileSync(join(flowsDir, file), 'utf8')) as {
-            id?: string
-            nodes?: Array<{ id?: string }>
-            data?: { app?: unknown; maxSteps?: number }
-          }
-          if (raw.id && raw.data?.app !== undefined) {
-            flowDefaults.set(raw.id, { app: raw.data.app, maxSteps: raw.data.maxSteps ?? 200 })
-            flowNodeIds.set(
-              raw.id,
-              new Set((raw.nodes ?? []).map((node) => node.id).filter((id): id is string => typeof id === 'string')),
-            )
-          }
-        } catch {
-          // 单个文件坏掉不影响其它流程
-        }
-      }
-    } catch {
-      // 目录不存在时保持空表，Test Run 会给出明确错误
-    }
-    console.log(`[myt] flow defaults ${flowDefaults.size} 张：${[...flowDefaults.keys()].join(', ') || '(无)'}`)
-  }
-
   const flowTasks = new FlowTaskRunner({
     createContext: ({ serial, deviceId, runId, app, abortSignal, params }) =>
       createStepContext(ctx.deviceControl, ctx.runs, {
@@ -241,22 +214,6 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
         app,
         options: { abortSignal, params, yadbPath: options.yadbPath, model: undefined },
       }),
-    defaultsOf: (flowId) => {
-      // 内核启动时已扫描 data/flows/*.json（见下方 flowDefaults 构建）
-      return flowDefaults.get(flowId)
-    },
-    matchByNodeIds: (nodeIds) => {
-      let best: { id: string; score: number } | undefined
-      for (const [flowId, known] of flowNodeIds) {
-        if (known.size === 0) continue
-        let hit = 0
-        for (const id of nodeIds) if (known.has(id)) hit += 1
-        const score = hit / Math.max(known.size, nodeIds.size)
-        // 至少一半节点对得上才认为是同一张图，避免误配
-        if (score >= 0.5 && (!best || score > best.score)) best = { id: flowId, score }
-      }
-      return best ? flowDefaults.get(best.id) : undefined
-    },
     pickDevice: (deviceId) => {
       // ① 直接给 ADB serial（含 `ip:port` 形式）：本地模拟器/已 connect 的真机都走这里。
       //    开发者最常传的就是 `127.0.0.1:5565` 这种，不该要求先去魔云腾注册容器。
@@ -470,15 +427,14 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
     }
   }
 
-  const server = createServer((req, res) => {
-    void (async () => {
+  /**
+   * 旧路由链：整体挂在 WebServer 的 fallback 上。
+   *
+   * 新功能请用 `ctx.http.get/post/put/prefix` 在插件里注册（见 `WorkflowApi`）；
+   * 这里的历史路由会逐个迁走，迁完即可删除整块。
+   */
+  const legacyRoutes = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-        // CORS 预检：浏览器在 POST 前先发 OPTIONS，必须直接 204 放行。
-        if (req.method === 'OPTIONS') {
-          res.writeHead(204, CORS_HEADERS)
-          res.end()
-          return
-        }
       try {
         if (options.uiDir && (url.pathname === '/' || url.pathname === '/index.html')) {
           const html = await readFile(join(options.uiDir, 'index.html'))
@@ -796,7 +752,7 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
             sendJson(res, 400, { error: '缺少 schema' })
             return
           }
-          sendJson(res, 200, flowTasks.validate(schema, String(body['flowId'] ?? '')))
+          sendJson(res, 200, flowTasks.validate(schema))
           return
         }
         if (url.pathname === '/api/task/run' && req.method === 'POST') {
@@ -808,7 +764,7 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
           }
           const inputs = (body['inputs'] ?? {}) as Record<string, unknown>
           try {
-            sendJson(res, 200, flowTasks.run({ inputs, schema }, String(inputs['flowId'] ?? '')))
+            sendJson(res, 200, flowTasks.run({ inputs, schema }))
           } catch (error) {
             sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
           }
@@ -841,6 +797,15 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
         }
         if (url.pathname === '/api/health') {
           sendJson(res, 200, { ok: true, hosts })
+          return
+        }
+        // 数据目录：界面用它显示当前路径，并在系统盘时提示用户改到其它盘。
+        if (url.pathname === '/api/data-dir') {
+          const dataDir = dirname(options.stateFile)
+          sendJson(res, 200, {
+            dir: dataDir,
+            onSystemDrive: process.platform === 'win32' && /^c:/iu.test(dataDir),
+          })
           return
         }
         if (url.pathname === '/api/hosts') {
@@ -1669,29 +1634,18 @@ export async function startKernel(options: KernelOptions): Promise<KernelHandle>
       } catch (error) {
         sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) })
       }
-    })()
-  })
+  }
 
-  await new Promise<void>((resolve, reject) => {
-    const { promise, resolve: done, reject: fail } = Promise.withResolvers<void>()
-    server.once('error', fail)
-    server.listen(options.port, listenHost, () => {
-      server.off('error', fail)
-      done()
-    })
-    void promise.then(resolve, reject)
-  })
+  // 未匹配任何插件路由时交给旧链（含静态文件服务）。
+  ctx.http.setFallback((context) => legacyRoutes(context.req, context.res))
 
-  const address = server.address()
-  const port = typeof address === 'object' && address ? address.port : options.port
+  const port = await ctx.http.listen()
   options.onReady?.({ port, host: listenHost })
 
   return {
     port,
     close: async () => {
-      const { promise, resolve } = Promise.withResolvers<void>()
-      server.close(() => resolve())
-      await promise
+      await ctx.http.close()
       await ctx.fiber.dispose()
     },
   }

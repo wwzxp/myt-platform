@@ -1,11 +1,12 @@
 'use strict'
 
-const { app, BrowserWindow, Menu, Tray, nativeImage, shell, utilityProcess } = require('electron')
+const { app, BrowserWindow, Menu, Tray, dialog, nativeImage, shell, utilityProcess } = require('electron')
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const http = require('node:http')
 const net = require('node:net')
 const path = require('node:path')
+const { readConfig, resolveDataDir, writeConfig } = require('./data-dir.cjs')
 
 const APP_ID = 'com.myt.farm'
 const DEFAULT_PORT = 7788
@@ -32,8 +33,42 @@ let kernel = null
 let kernelPort = null
 let shuttingDown = false
 
-function getUserDataDir() {
+/**
+ * 配置目录：存放 `myt.config.json`（用户选择的数据目录）与主进程日志。
+ *
+ * 仍在 Electron 默认位置——它是「指向数据目录的指针」，
+ * 本质是设置而非数据，跟着系统走是合理的。
+ */
+function getConfigDir() {
   return app.getPath('userData')
+}
+
+/** 解析后的数据目录（首次调用时计算并缓存）。 */
+let resolvedData = null
+
+/**
+ * 数据目录：流程、设备状态、日志等实际用户数据。
+ *
+ * 优先级见 `data-dir.ts`：env → 配置 → 用户选择 → 安装目录 → userData。
+ * **默认不落 C 盘**：便携版用安装目录，否则建议非系统盘。
+ */
+function getDataDir() {
+  if (resolvedData) return resolvedData.dir
+  resolvedData = resolveDataDir({
+    configDir: getConfigDir(),
+    installDir: app.isPackaged ? path.dirname(app.getPath('exe')) : path.join(__dirname, '..'),
+    fallbackDir: getConfigDir(),
+  })
+  logMain(`[data] dir=${resolvedData.dir} source=${resolvedData.source} systemDrive=${resolvedData.onSystemDrive}`)
+  if (resolvedData.onSystemDrive) {
+    logMain('[data] 警告：数据目录在系统盘，建议在设置里改到其它盘')
+  }
+  return resolvedData.dir
+}
+
+/** 兼容旧调用点：日志写到配置目录（与数据分开，避免数据目录换了日志丢失）。 */
+function getUserDataDir() {
+  return getConfigDir()
 }
 
 function logMain(line) {
@@ -102,7 +137,8 @@ function startKernel(port) {
       MYT_PORT: String(port),
       MYT_SDK_BASE: process.env.MYT_SDK_BASE ?? 'http://127.0.0.1:7878',
       MYT_HOSTS: process.env.MYT_HOSTS ?? '192.168.0.113',
-      MYT_STATE_FILE: path.join(getUserDataDir(), 'devices.json'),
+      // 设备状态属于用户数据，跟随数据目录（不是配置目录）。
+      MYT_STATE_FILE: path.join(getDataDir(), 'devices.json'),
       MYT_UI_DIR: app.isPackaged
         ? path.join(process.resourcesPath, 'ui')
         : path.join(__dirname, '..', '..', '..', 'client', 'ui'),
@@ -278,9 +314,75 @@ async function quit() {
   app.quit()
 }
 
+/**
+ * 首次运行：让用户选数据目录。
+ *
+ * 用户明确要求不默认存 C 盘，所以默认预填**第一个非系统盘**。
+ * 用户可以直接确认、浏览选其它目录，或者选择「使用安装目录」（便携式）。
+ * 关闭对话框视为跳过：记下 `skipped`，以后不再打扰，可在设置里改。
+ */
+async function promptDataDirIfNeeded() {
+  if (!resolvedData) getDataDir()
+  if (!resolvedData.needsPrompt) return
+
+  const options = {
+    type: 'question',
+    title: '选择数据存放位置',
+    message: '流程、设备状态、日志会保存在这里',
+    detail: [
+      `建议选择非系统盘，重装系统时数据不受影响。`,
+      ``,
+      `当前将使用：${resolvedData.dir}`,
+      `建议路径：${resolvedData.suggested}`,
+      ``,
+      `点「使用安装目录」＝便携模式；点「选择其它位置」可自选。`,
+    ].join('\n'),
+    buttons: ['使用安装目录', '选择其它位置', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+  }
+
+  const picked = await dialog.showMessageBox(options)
+  const configDir = getConfigDir()
+
+  if (picked.response === 2) {
+    // 跳过：记下来，以后不再弹
+    writeConfig(configDir, { ...readConfig(configDir), skipped: true })
+    logMain('[data] 用户跳过选择，沿用当前目录')
+    return
+  }
+
+  if (picked.response === 1) {
+    const result = await dialog.showOpenDialog({
+      title: '选择数据目录',
+      defaultPath: resolvedData.suggested,
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      writeConfig(configDir, { ...readConfig(configDir), skipped: true })
+      logMain('[data] 用户取消选目录')
+      return
+    }
+    const chosen = result.filePaths[0]
+    writeConfig(configDir, { dataDir: chosen })
+    resolvedData = resolveDataDir({
+      configDir,
+      installDir: app.isPackaged ? path.dirname(app.getPath('exe')) : path.join(__dirname, '..'),
+      fallbackDir: configDir,
+    })
+    logMain(`[data] 用户选择 ${chosen}`)
+    return
+  }
+
+  // 使用安装目录：清掉之前的选择，让解析回落到 install
+  writeConfig(configDir, { skipped: true })
+  logMain('[data] 用户选择安装目录（便携模式）')
+}
+
 async function bootstrap() {
   logMain('[app] starting')
   try {
+    await promptDataDirIfNeeded()
     const preferred = parsePort(process.env.MYT_PORT) ?? DEFAULT_PORT
     const port = await choosePort(preferred)
     logMain(`[app] port=${port}`)

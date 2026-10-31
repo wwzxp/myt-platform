@@ -19,6 +19,7 @@
     "noEmit": true,
     "lib": ["es6", "dom", "es2020", "es2019.Array"],
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": ["./src/*"]
     }

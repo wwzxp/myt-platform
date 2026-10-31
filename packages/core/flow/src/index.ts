@@ -12,7 +12,7 @@ export interface StepContext {
   device: DeviceControl
   runs: RunStore
   /** yadb 本地路径；未配置时 `ensureYadb` 会失败。 */
-  yadbPath?: string
+  yadbPath?: string | undefined
   /** 拟人化随机源（可注入种子复现）。 */
   random: Random
   humanPolicy: HumanPolicy
@@ -24,7 +24,7 @@ export interface StepContext {
    * 未配置时为 undefined，步骤必须回落到自己的确定性定位路径——
    * 这是「模型不可用流程仍能跑」的保证。
    */
-  model?: (prompt: string) => Promise<string>
+  model?: ((prompt: string) => Promise<string>) | undefined
   /**
    * 目标 App 的包名与页面配置（由流程定义提供）。
    *
@@ -39,7 +39,7 @@ export interface StepContext {
     pages: unknown
     /** 异常恢复规则表。 */
     recoveryRules: readonly unknown[]
-  }
+  } | undefined
   /** 若已被取消则抛错；长循环需要每轮调用。 */
   throwIfCancelled: () => void
   /** 当前快照的惰性获取：同一 step 内多次定位只抓一次。 */
@@ -91,14 +91,14 @@ export interface FlowDefinition {
    * - `uiautomator`：轻量场景
    * - 缺省 `uiautomator`
    */
-  uiChannel?: 'uiautomator' | 'yadb'
+  uiChannel?: 'uiautomator' | 'yadb' | undefined
   /**
    * 目标 App 配置（包名、首页深链、页面表、恢复规则）。
    *
    * 由业务包提供，引擎不认识任何具体 App。
    * 类型保持宽松：`@myt/flow` 不依赖 `@myt/automation`（避免循环依赖）。
    */
-  app?: unknown
+  app?: unknown | undefined
 }
 
 /**
@@ -185,7 +185,7 @@ export interface ChainStepSpec {
    *
    * 值形如 `'${nickname}'` 时从运行数据取；其余按字面量传。
    */
-  params?: Record<string, string>
+  params?: Record<string, string> | undefined
 }
 
 /**
@@ -266,21 +266,21 @@ export interface FlowPackCapabilities {
 
 export interface RunOptions {
   /** 从已有运行续跑：跳过已完成步骤。 */
-  resumeFrom?: string
+  resumeFrom?: string | undefined
   /** 只记录不执行（用于校验流程定义）。 */
-  dryRun?: boolean
+  dryRun?: boolean | undefined
   /** yadb 本地路径；登录类流程需要。 */
-  yadbPath?: string
+  yadbPath?: string | undefined
   /** 拟人化随机种子；给定后流程可复现。 */
-  seed?: number
+  seed?: number | undefined
   /** UI 抓取通道；小红书登录必须用 yadb（与旧实现一致）。 */
   uiChannel?: 'uiautomator' | 'yadb'
   /** 流程参数（透传给 `StepContext.flowParams`）。 */
   params?: Record<string, string>
   /** 取消信号：步骤之间与步骤内部（调用 throwIfCancelled）生效。 */
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal | undefined
   /** 本地模型调用函数；不传则流程只能走确定性定位。 */
-  model?: (prompt: string) => Promise<string>
+  model?: ((prompt: string) => Promise<string>) | undefined
 }
 export interface RunResult {
   runId: string
@@ -325,7 +325,7 @@ export interface CreateStepContextInput {
   deviceId: string
   runId: string
   /** 目标 App 配置（宽松类型，避免 `@myt/flow` 依赖 `@myt/automation`）。 */
-  app?: unknown
+  app?: unknown | undefined
   options?: RunOptions
 }
 
@@ -556,3 +556,6 @@ declare module '@deepseek-ai/cordis' {
     flows: FlowRegistry
   }
 }
+
+/** Cordis Loader 按包名导入时要求默认导出。 */
+export default FlowRegistry

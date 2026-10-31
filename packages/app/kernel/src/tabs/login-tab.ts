@@ -126,9 +126,9 @@ export const DEFAULT_LOGIN_MODE: LoginModeOptions = {
 export interface ActionCheck {
   ok: boolean
   /** 不满足时的原因（对应旧实现的弹窗文案）。 */
-  reason?: string
+  reason?: string | undefined
   /** 被跳过的设备（旧实现「已有任务，已自动跳过」）。 */
-  skipped?: string[]
+  skipped?: string[] | undefined
 }
 
 /**

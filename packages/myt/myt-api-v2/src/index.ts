@@ -15,7 +15,7 @@ export interface MytApiV2Config {
 interface Envelope<T> {
   code: number
   data: T
-  message?: string
+  message?: string | undefined
 }
 
 interface RawContainer {
@@ -153,7 +153,7 @@ export class MytApiV2 extends MytHost {
    * `GET /and_api/v1/get_api_info/{ip}/{name}`，`data` 里含
    * ADB / API / HOST_RPA / RPC 四组地址。
    */
-  async getApiInfo(hostIp: string, name: string, timeoutMs?: number): Promise<Record<string, string>> {
+  async getApiInfo(hostIp: string, name: string, _timeoutMs?: number): Promise<Record<string, string>> {
     const body = await this.getRaw<Record<string, string>>(
       `/and_api/v1/get_api_info/${hostIp}/${encodeURIComponent(name)}`,
     )
@@ -331,16 +331,19 @@ export class MytApiV2 extends MytHost {
    *
    * 异步查询接口在「任务进行中」时返回 `code=203/204`，需要读原始 code 才能区分。
    */
-  private async getRaw<T>(path: string): Promise<{ code: number; message?: string; data?: T }> {
+  private async getRaw<T>(path: string): Promise<{ code: number; message?: string | undefined; data?: T | undefined }> {
     const url = `${this.baseUrl}${path}`
     const res = await fetch(url, { signal: AbortSignal.timeout(this.timeoutMs) })
     // 实测异步接口的信封是 `{code, error, message, data}`，比普通接口多一个 error 字段。
     const body = (await res.json()) as {
       code?: number
       error?: string | null
-      message?: string
-      data?: T
+      message?: string | undefined
+      data?: T | undefined
     }
     return { code: body.code ?? -1, message: body.message ?? body.error ?? undefined, data: body.data }
   }
 }
+
+/** Cordis Loader 按包名导入时要求默认导出。 */
+export default MytApiV2

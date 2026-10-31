@@ -40,7 +40,9 @@ import { BaseNode, CommentRender, GroupNodeRender, LineAddButton, NodePanel } fr
 
 export function useEditorProps(
   initialData: FlowDocumentJSON,
-  nodeRegistries: FlowNodeRegistry[]
+  nodeRegistries: FlowNodeRegistry[],
+  /** 保存回调：内容变更（防抖 1s）与手动保存时调用。 */
+  onSave?: (doc: Record<string, unknown>) => void | Promise<void>
 ): FreeLayoutProps {
   return useMemo<FreeLayoutProps>(
     () => ({
@@ -231,10 +233,13 @@ export function useEditorProps(
       onContentChange: debounce((ctx: FreeLayoutPluginContext, event) => {
         if (ctx.document.disposed) return;
 
-        console.log('Auto Save: ', event, {
+        // 自动保存：把整张图（含全局变量）交给上层持久化。
+        // 防抖 1s，避免拖拽时每帧都发请求。
+        const doc = {
           ...ctx.document.toJSON(),
           globalVariable: ctx.get<GetGlobalVariableSchema>(GetGlobalVariableSchema)(),
-        });
+        };
+        void onSave?.(doc as Record<string, unknown>);
       }, 1000),
       /**
        * Running line
@@ -408,6 +413,7 @@ export function useEditorProps(
         createPanelManagerPlugin(),
       ],
     }),
-    []
+    // initialData 变化（从内核加载完成）时必须重建，否则画布还是空图
+    [initialData, nodeRegistries, onSave]
   );
 }

@@ -32,10 +32,10 @@ export interface LocateSpec {
    * （「输入标题」而不是「标题」——后者会选到「一键排版」，实测）。
    */
   intent: string
-  /** 确定性兜底：模型不可用或失败时用旧路径。 */
-  fallback?: (root: UiNode) => { x: number; y: number } | null
+  /** 确定性兜底：模型不可用或失败时用旧路径。允许显式传 `undefined`（调用方常从可选配置直接透传）。 */
+  fallback?: ((root: UiNode) => { x: number; y: number } | null) | undefined
   /** 是否启用视觉兜底，默认开启。 */
-  vision?: boolean
+  vision?: boolean | undefined
   /**
    * 严格模式：只接受与意图**字面相关**的候选，不接受模型的自由选择。
    *
@@ -43,7 +43,7 @@ export interface LocateSpec {
    * 会从剩余候选里挑一个最像的——实测在发布编辑页上找「取消」时选中了「返回」，
    * 一点就退回上一页，整单失败。
    */
-  strict?: boolean
+  strict?: boolean | undefined
 }
 
 /** 执行方式。 */
@@ -133,11 +133,11 @@ export interface ActionResult {
   /** 实际尝试轮数。 */
   rounds: number
   /** 命中坐标（点击类动作）。 */
-  point?: { x: number; y: number }
+  point?: { x: number; y: number } | undefined
   /** 命中的候选（调试用）。 */
-  target?: ActionTarget
+  target?: ActionTarget | undefined
   /** 定位来源。 */
-  source?: 'model' | 'vision' | 'fallback' | 'fixed' | 'none'
+  source?: 'model' | 'vision' | 'fallback' | 'fixed' | 'none' | undefined
   /** 失败原因。 */
   reason?: string
   /** 耗时毫秒。 */

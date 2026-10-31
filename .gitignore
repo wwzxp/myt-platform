@@ -22,3 +22,9 @@ lib/
 # 前端构建缓存
 .rsbuild/
 .vite/
+
+# vendor 里的 tsc 输出（源码是 .ts，旁边生成的 js/d.ts 不入库）
+vendor/*/src/*.js
+vendor/*/src/*.js.map
+vendor/*/src/*.d.ts
+vendor/*/src/*.d.ts.map

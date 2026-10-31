@@ -76,19 +76,6 @@ export interface FlowTaskDeps {
   }) => StepContext
   /** 选择执行设备；单机开发时返回默认设备。 */
   pickDevice: (deviceId?: string) => { deviceId: string; serial: string }
-  /**
-   * 按流程 id 查业务配置（同步）。
-   *
-   * 画布上的 schema 只有 `{nodes, edges}`——`app`（包名/页面表）和 `maxSteps`
-   * 是业务知识，不该让用户在画布上填。内核启动时预加载 `data/flows/*.json` 进表。
-   */
-  defaultsOf: (flowId: string) => { app: unknown; maxSteps: number } | undefined
-  /**
-   * 按节点 id 集合反查流程配置。
-   *
-   * 画布不会告诉内核它画的是哪张图，但节点 id 是稳定的——用交集比例最高的一张图。
-   */
-  matchByNodeIds: (nodeIds: ReadonlySet<string>) => { app: unknown; maxSteps: number } | undefined
 }
 
 /** 任务表上限：防止长时间运行把内存撑爆。 */
@@ -111,31 +98,48 @@ export class FlowTaskRunner {
   }
 
   /**
-   * 补全画布 schema 缺失的业务配置。
+   * 把画布的业务配置提取到图顶层的 `data`。
    *
-   * 画布只有 `{nodes, edges}`；`app` 和 `maxSteps` 从内核的流程库按 id 取。
-   * 已有 `data` 时不覆盖（允许高级用法把配置直接画在图里）。
+   * **配置来源是画布本身**：`schema.globalVariable`（JSON Schema）里
+   * `properties.app.default` 与 `properties.maxSteps.default` 就是用户的配置值。
+   * 用户在变量面板里改的正是它们，所以图是自包含的——换机器、复制文件都带着配置。
+   *
+   * 为什么不用顶层 `data` 直接存：那样用户看不见也改不了，必须另做 UI。
+   *
+   * @returns 注入 `data` 之后的图对象（不修改入参）
    */
-  private hydrate(input: unknown, flowId?: string): unknown {
-    if (!input || typeof input !== 'object') return input
-    const obj = input as Record<string, unknown>
+  private withConfig(input: unknown): unknown {
+    const obj = (input ?? {}) as Record<string, unknown>
+
+    // 已经带 data 的（老格式 / 手工构造）直接用
     if (obj['data'] !== undefined) return obj
 
-    const id = typeof obj['id'] === 'string' ? obj['id'] : flowId
-    let defaults = id ? this.deps.defaultsOf(id) : undefined
-
-    // 画布不会传 flowId：按节点 id 集合与已知流程做匹配（同一张图节点 id 稳定）。
-    if (!defaults) {
-      const nodes = Array.isArray(obj['nodes']) ? (obj['nodes'] as unknown[]) : []
-      const ids = new Set(
-        nodes
-          .map((node) => (node && typeof node === 'object' ? (node as Record<string, unknown>)['id'] : undefined))
-          .filter((value): value is string => typeof value === 'string'),
+    const globalVariable = obj['globalVariable']
+    if (!globalVariable || typeof globalVariable !== 'object') {
+      throw new FlowGraphError(
+        '画布缺少 globalVariable：app 与 maxSteps 必须在变量面板里配置（见 docs/spec/流程图引擎与可视化编排.md）',
       )
-      if (ids.size > 0) defaults = this.deps.matchByNodeIds(ids)
     }
-    if (!defaults) return obj
-    return { ...obj, data: { ...defaults } }
+
+    const properties = (globalVariable as Record<string, unknown>)['properties']
+    if (!properties || typeof properties !== 'object') {
+      throw new FlowGraphError('globalVariable 缺少 properties：请在变量面板添加 app 与 maxSteps')
+    }
+
+    const props = properties as Record<string, unknown>
+    const appSchema = props['app'] as Record<string, unknown> | undefined
+    const maxStepsSchema = props['maxSteps'] as Record<string, unknown> | undefined
+
+    const app = appSchema?.['default']
+    if (app === undefined) {
+      throw new FlowGraphError('globalVariable 缺少 app.default：请在变量面板配置目标 App')
+    }
+    const maxSteps = maxStepsSchema?.['default']
+    if (typeof maxSteps !== 'number') {
+      throw new FlowGraphError('globalVariable 缺少 maxSteps.default（数字）：请填写最大执行步数')
+    }
+
+    return { ...obj, data: { app, maxSteps } }
   }
 
   /**
@@ -145,12 +149,11 @@ export class FlowTaskRunner {
    * `errors` 是**字符串数组**，不是对象数组——返回对象会让前端解析失败并显示
    * "Internal Server Error"（实测踩过）。
    */
-  validate(schema: string, flowId?: string): { valid: boolean; errors?: string[] } {
+  validate(schema: string): { valid: boolean; errors?: string[] } {
     try {
       const parsed = JSON.parse(schema) as unknown
       // 前端 schema 只有 `{nodes, edges}`，不带业务配置——补全后再校验。
-      const hydrated = this.hydrate(parsed, flowId)
-      const graph = validateFlowGraph(hydrated)
+      const graph = validateFlowGraph(this.withConfig(parsed))
       if (!graph.data.app.packageName) {
         return { valid: false, errors: ['app.packageName 为空'] }
       }
@@ -163,7 +166,7 @@ export class FlowTaskRunner {
   }
 
   /** `POST /api/task/run`：启动执行，立即返回 taskID。 */
-  run(input: TaskRunInput, flowId?: string): { taskID: string } {
+  run(input: TaskRunInput): { taskID: string } {
     const taskID = randomUUID()
     const task: FlowTask = {
       id: taskID,
@@ -177,7 +180,7 @@ export class FlowTaskRunner {
     this.evict()
 
     // 后台执行；不 await——flowgram 约定 run 立即返回
-    void this.execute(task, input, flowId).catch((error: unknown) => {
+    void this.execute(task, input).catch((error: unknown) => {
       task.status = 'failed'
       task.endTime = Date.now()
       task.outputs = { error: error instanceof Error ? error.message : String(error) }
@@ -226,7 +229,7 @@ export class FlowTaskRunner {
   }
 
   /** 真正执行：把每个节点的结果写进 `task.reports`。 */
-  private async execute(task: FlowTask, input: TaskRunInput, flowId?: string): Promise<void> {
+  private async execute(task: FlowTask, input: TaskRunInput): Promise<void> {
     task.status = 'processing'
     let parsed: unknown
     try {
@@ -234,7 +237,7 @@ export class FlowTaskRunner {
     } catch (error) {
       throw new Error(`图 JSON 解析失败：${error instanceof Error ? error.message : String(error)}`)
     }
-    const loaded = validateFlowGraph(this.hydrate(parsed, flowId))
+    const loaded = validateFlowGraph(this.withConfig(parsed))
 
     const params: Record<string, string> = {}
     for (const [key, value] of Object.entries(input.inputs ?? {})) {

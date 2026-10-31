@@ -1,0 +1,9 @@
+{
+  "name": "@myt/profile",
+  "private": true,
+  "dsh": {
+    "profile": {
+      "bundles": []
+    }
+  }
+}

@@ -36,6 +36,8 @@
 | `packages/myt/myt-api-v2/` | v2 SDK（7878）Provider：协议适配与字段收敛 |
 | `packages/core/devices/` | 设备登记与对账：`ctx.devices`，容器 id → 平台 `DeviceId`，墓碑与状态文件 |
 | `packages/core/runs/` | `ctx.runs` 运行事件流：追加事件、错误分类、checkpoint、中断标记 |
+| `packages/core/webserver/` | **HTTP 路由插件**（`@myt/webserver`，服务键 `ctx.http`）：只做监听/分发/CORS/JSON/错误收敛，**不认识任何业务**；精确路由优先于前缀路由；插件在 `[Service.init]` 里自己注册 |
+| `packages/core/workflows/` | **流程持久化插件**：`WorkflowStore` 一图一文件，文件名=流程名、id 在内容里；支持列表/读/存/新建/改名/复制/删除；用户可在资源管理器直接操作文件 |
 | `packages/core/flow/` | `ctx.flows` 流程注册表 + `FlowRunner`：步骤跳过/重试/分类/断点续跑 |
 | `packages/device/device/` | 设备能力接缝定义（dump/tap/swipe/text/back/screenshot/深链/forceStop/connect） |
 | `packages/device/device-adb/` | ADB 直连 Provider：uiautomator 解析、ADBKeyboard 输入、connect |
@@ -87,6 +89,30 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-10-31 12:20:00 | 修改 | `packages/client/app/package.json` | TypeScript 升级到 `^6.0.3`，**全项目 TS 版本统一**（此前前端 5.9 / 其余 6.0 不兼容） |
+| 2026-10-31 12:20:00 | 修改 | `packages/client/app/tsconfig.json` | 恢复 `ignoreDeprecations: "6.0"`（TS 6 才识别，5.9 会报 TS5103） |
+| 2026-10-31 12:20:00 | 修改 | `tsconfig.host.json` | `client/app` 重新纳入聚合，references 352 个；全量 `tsc -b` 0 错误 |
+| 2026-10-31 12:00:00 | 新增 | `packages/client/app/src/services/workflow-api.ts` | 前端流程图 API 客户端：list/create/load/save/delete/rename/duplicate + data-dir，统一错误处理 |
+| 2026-10-31 12:00:00 | 新增 | `packages/client/app/src/context/workflow-context.ts` | 当前流程上下文（fileName/name/saveState/save），供工具栏与自动保存使用 |
+| 2026-10-31 12:00:00 | 修改 | `packages/client/app/src/editor.tsx` | 支持 `?flow=` 从内核加载；自动保存接上；**修数据覆盖 bug**：加载后 2s 抑制 + 内容指纹比对，避免初始化覆盖磁盘 |
+| 2026-10-31 12:00:00 | 修改 | `packages/client/app/src/hooks/use-editor-props.tsx` | `onContentChange` 从 `console.log` 改为调用 `onSave` 回调（防抖 1s） |
+| 2026-10-31 12:00:00 | 修改 | `packages/client/app/src/components/tools/save.tsx` | Save 按钮改为真实保存 |
+| 2026-10-31 12:00:00 | 修改 | `packages/client/app/src/components/testrun/testrun-button/index.tsx` | Test Run 前先保存（不能跑旧图） |
+| 2026-10-31 12:00:00 | 修改 | `packages/client/app/tsconfig.json` | 移除 `ignoreDeprecations: 6.0`（前端用 TS 5.9 不认识） |
+| 2026-10-31 12:00:00 | 修改 | `tsconfig.host.json` | 排除 `client/app`（rsbuild 独立构建，不参与 tsc -b 聚合） |
+| 2026-10-31 11:40:00 | 新增 | `packages/app/desktop/src/data-dir.ts` | **数据目录解析**：env → 配置 → 用户选择 → 安装目录 → userData 五级优先级；`isSystemDrive` 识别 C 盘；`writeConfig` 原子写；15 个测试通过 |
+| 2026-10-31 11:40:00 | 新增 | `packages/app/desktop/scripts/build.mjs` | esbuild 把 `data-dir.ts` 打成 `data-dir.cjs`（`main.cjs` 无法 require TS） |
+| 2026-10-31 11:40:00 | 修改 | `packages/app/desktop/src/main.cjs` | `getUserDataDir` 拆为 `getConfigDir`/`getDataDir`；首次运行弹窗（默认预填第一个非系统盘）；`MYT_STATE_FILE` 跟随数据目录 |
+| 2026-10-31 11:40:00 | 修改 | `packages/app/kernel/src/main.ts` | `stateFile` 支持 `MYT_STATE_FILE` → `MYT_DATA_DIR/devices.json` → 项目 `data/` 三级回落 |
+| 2026-10-31 11:40:00 | 修改 | `packages/app/kernel/src/kernel.ts` | 新增 `GET /api/data-dir`，返回当前数据目录与是否在系统盘 |
+| 2026-10-31 11:20:00 | 新增 | `packages/core/webserver/` | **WebServer 插件**（`@myt/webserver`，`ctx.http`）：HTTP 路由服务，只做监听/分发/CORS/JSON/错误收敛；精确路由优先于前缀路由；12 个测试通过 |
+| 2026-10-31 11:20:00 | 新增 | `packages/core/workflows/src/api.ts` | **WorkflowApi 插件**：流程图 7 个路由由插件自己注册，kernel 不再硬编码 `/api/workflows`；作为「插件自挂路由」范例 |
+| 2026-10-31 11:20:00 | 修改 | `packages/app/kernel/src/kernel.ts` | 用 `ctx.http` 替代 `createServer`；旧 47 个路由整体挂在 `setFallback` 上（零风险渐进迁移）；删除已迁走的 workflows 路由块 |
+| 2026-10-31 11:00:00 | 新增 | `packages/core/workflows/` | **WorkflowStore 插件**（`@myt/workflows`）：流程持久化。文件名=流程名（用户可读/改名/复制），身份是内容里的 uuid；重复 id 自动重分配、坏文件隔离、原子写（tmp+rename）。13 个测试全通过 |
+| 2026-10-31 11:00:00 | 修改 | `packages/app/kernel/src/kernel.ts` | 装配 `WorkflowStore`；新增 6 个 `/api/workflows*` 路由（列表/新建/读/存/删/改名/复制），精确路由置于 startsWith 分支之前 |
+| 2026-10-31 11:00:00 | 修改 | `tsconfig.base.json` | 补 20 条 `@myt/*` paths（**typert 必需**：缺映射会让同一包解析出两份 Symbol，导致 `not exported` 报错） |
+| 2026-10-31 11:00:00 | 修改 | `tsconfig.host.json` | references 增至 351 个，指向各包 `tsconfig.host.json`（**不能指向包目录**，否则解析到 files:[] 的聚合配置） |
+| 2026-10-31 11:00:00 | 新增目录 | `vendor/`、`apps/`、`native/`、`scripts/` | 全量复制 dsh 源码：9 个核心底层包 + 278 个 dsh 包 + 5 个应用 + 6 个原生包 + 336 个构建脚本；**344 个包全部构建成功（lib/index.js 零缺失）** |
 | 2026-10-31 02:35:00 | 修改 | `docs/spec/界面设计规范.md` | 补「节点与端口」：五种节点、端口中文释义、表单字段表、FormItem 坑 |
 | 2026-10-31 00:35:00 | 修改 | `docs/spec/流程图引擎与可视化编排.md` | 补「Test Run 接入」：5 个端点契约、三个坑（errors 必须是 string[]/跨域静默失败/画布 schema 无 data）、前端配置、上下文共用 |
 | 2026-10-31 00:35:00 | 新增 | `packages/app/kernel/src/flow-task.ts` | **flowgram 运行时接口**：`FlowTaskRunner` 实现 `TaskValidate`/`TaskRun`/`TaskReport`/`TaskResult`/`TaskCancel`，内部调 `runXhsGraph` 驱动 ADB；按节点 id 反查图配置（画布不带 `app`/`maxSteps`） |

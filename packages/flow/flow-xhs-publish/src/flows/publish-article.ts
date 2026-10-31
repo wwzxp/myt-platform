@@ -16,7 +16,6 @@ import {
   assertPage,
   currentPage,
   waitForPage,
-  askPageYesNo,
   sleepRandom,
   tapHuman,
   PageRegistry,
@@ -66,26 +65,6 @@ const ARTICLE_PAGES = ['article-editor'] as const
  * 标题和正文都在同一页，用定义顺序区分：先标题后正文。
  * `requires` 只校验「在长文编辑页」，具体填哪个靠 `locate.intent` 和 `act.inputLocator`。
  */
-function fillArticleField(
-  id: string,
-  title: string,
-  intent: string,
-  text: string,
-  locator: ActionSpec['act'] extends { kind: 'input'; inputLocator: infer L } ? L : never,
-): ActionSpec {
-  return {
-    id,
-    title,
-    requires: ARTICLE_PAGES,
-    // 填写类禁止恢复：已有输入内容，退回会丢数据。
-    recoverable: false,
-    locate: { intent },
-    act: { kind: 'input', text, inputLocator: locator },
-    verify: { kind: 'inputEquals', locator, text },
-    rounds: 6,
-    gap: [0.8, 1.4],
-  }
-}
 
 /**
  * 创建长文笔记发布流程。

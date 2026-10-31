@@ -1,0 +1,54 @@
+# myt 的 profile 补丁层。
+#
+# 装配顺序（由 dsh-app-boot 决定）：
+#   空 entry 列表 → 各 bundle 的 cordis.patch.yml → 本文件 → 启动器 --patch
+#
+# 插件在这里按业务声明；启动器（apps/desktop-host）只负责读 profile 并装配。
+
+- insert:
+    # ── HTTP + 认证（dsh 的 Web 栈：有浏览器会话认证，不是裸端口）──
+    - id: credentials
+      name: '@deepseek-ai/dsh-credentials-local'
+
+    - id: webserver
+      name: '@deepseek-ai/dsh-host-webserver'
+      config:
+        host: '127.0.0.1'
+        port: 0
+
+    - id: connection
+      name: '@deepseek-ai/dsh-client-connection'
+
+    # ── 宿主 SDK（mytHost 服务）──
+    - id: myt-api-v2
+      name: '@myt/myt-api-v2'
+      config:
+        baseUrl: 'http://127.0.0.1:7878'
+
+    # ── 领域服务 ──
+    - id: devices
+      name: '@myt/devices'
+      config:
+        stateFile: './data/devices.json'
+
+    - id: runs
+      name: '@myt/runs'
+
+    - id: flows
+      name: '@myt/flow'
+
+    # ── 流程图持久化 ──
+    - id: workflows
+      name: '@myt/workflows'
+
+    - id: workflow-api
+      name: '@myt/workflow-api'
+
+    - id: system-api
+      name: '@myt/system-api'
+
+    # ── 前端静态资源 + 浏览器认证（访问页面时 set-cookie）──
+    - id: frontend-static
+      name: '@deepseek-ai/dsh-host-frontend-static'
+      config:
+        distIndex: 'F:\ai\myt_tools\packages\client\app\dist\index.html'

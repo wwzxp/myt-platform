@@ -202,7 +202,7 @@ export function collectGalleryGrid(root: UiNode): GalleryImage[] {
           const badge = nodes.find((candidate) => isBadgeOf(candidate.bounds, child.bounds))
           const selected = badge ? hasNumberBadge(badge) || badge.selected : false
 
-          const [cx1, cy1, cx2, cy2] = child.bounds
+          const [cx1, cy1, cx2, _cy2] = child.bounds
           if (badge) {
             const [bx1, by1, bx2, by2] = badge.bounds
             cells.push({

@@ -52,7 +52,7 @@ const FEWSHOT = `示例1：
 export function buildLocatePrompt(
   nodes: readonly CompactNode[],
   intent: string,
-  screen: { width: number; height: number },
+  _screen: { width: number; height: number },
   variant: LocatePromptVariant = 'fewshot',
 ): string {
   const lines = nodes.map((n) => {

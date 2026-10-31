@@ -60,7 +60,7 @@ export async function clearInput(ctx: ActionContext, content: string): Promise<v
 export async function inputWithHumanLike(
   ctx: ActionContext,
   text: string,
-  description: string,
+  _description: string,
   maxRetries = 5,
 ): Promise<boolean> {
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {

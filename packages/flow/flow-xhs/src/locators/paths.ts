@@ -23,17 +23,7 @@ export function nodeAtPath(root: UiNode, path: number[]): UiNode | null {
   return current
 }
 
-function centerOf(node: UiNode): Point {
-  const [x1, y1, x2, y2] = node.bounds
-  return { x: Math.floor((x1 + x2) / 2), y: Math.floor((y1 + y2) / 2) }
-}
 
-/** 通用：按多条路径找可点击节点，返回中心点。 */
-function findByPaths(root: UiNode, paths: number[][]): UiNode | null {
-  for (const path of paths) {
-    const node = nodeAtPath(root, path)
-    if (node && node.clickable) return node
-  }
-  return null
-}
+
+
 

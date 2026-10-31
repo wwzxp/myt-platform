@@ -1,0 +1,69 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/include"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../automation/automation/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/devices/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/flow/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/runs/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/workflow-api/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/workflows/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/device-adb/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/device/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/human/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/locator/tsconfig.host.json"
+    },
+    {
+      "path": "../../flow/flow-xhs-device/tsconfig.host.json"
+    },
+    {
+      "path": "../../flow/flow-xhs-publish/tsconfig.host.json"
+    },
+    {
+      "path": "../../flow/flow-xhs/tsconfig.host.json"
+    },
+    {
+      "path": "../../myt/myt-api-v2/tsconfig.host.json"
+    },
+    {
+      "path": "../../myt/myt-api-v3/tsconfig.host.json"
+    },
+    {
+      "path": "../../myt/myt-host/tsconfig.host.json"
+    }
+  ]
+}

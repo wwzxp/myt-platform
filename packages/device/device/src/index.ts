@@ -144,7 +144,7 @@ export abstract class DeviceControl extends Service {
     serial: string,
     localPath: string,
     remotePath: string,
-    options?: { ownerUid?: string; mode?: string },
+    options?: { ownerUid?: string | undefined; mode?: string | undefined },
   ): Promise<void>
 
   /**

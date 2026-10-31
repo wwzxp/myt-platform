@@ -12,9 +12,6 @@ import {
 } from '../locators/locators.ts'
 import {
   getAgreeContinueButtonPosition,
-  getClearPhoneButtonPosition,
-  getVerificationCodeInputPosition,
-  getVerifyLoginButtonInfo,
 } from '../locators/locators.ts'
 import {
   getCardPasswordInputPosition,

@@ -20,15 +20,15 @@ export interface BrowseStep {
   /** 观察到的页面标识。 */
   pageBefore: string
   /** 操作后观察到的页面标识。 */
-  pageAfter?: string
+  pageAfter?: string | undefined
   /** 是否成功。 */
   ok: boolean
   /** 命中的目标名。 */
-  targetName?: string
+  targetName?: string | undefined
   /** 实际点击坐标。 */
-  point?: { x: number; y: number }
+  point?: { x: number; y: number } | undefined
   /** 失败原因。 */
-  reason?: string
+  reason?: string | undefined
   /** 观察耗时。 */
   observeMs: number
   /** 定位+操作耗时。 */

@@ -269,7 +269,7 @@ async function getSpecifiedTabPosition(ctx: StepContext): Promise<[number, numbe
 export interface OneClickNewDeviceOptions {
   deviceBrand?: string | null
   deviceModel?: string | null
-  overseasRandom?: boolean
+  overseasRandom?: boolean | undefined
 }
 
 /**
@@ -403,8 +403,8 @@ export const ONE_CLICK_INTERNALS = {
  * 所以这里只有一个 step，内部照旧代码顺序执行。
  */
 export function createOneClickNewDeviceFlow(input: {
-  brand?: string
-  model?: string
+  brand?: string | undefined
+  model?: string | undefined
   overseasRandom?: boolean
 } = {}): import('@myt/flow').FlowDefinition {
   const brand = input.brand?.trim() ?? ''

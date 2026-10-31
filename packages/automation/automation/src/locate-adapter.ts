@@ -1,5 +1,5 @@
 import type { StepContext } from '@myt/flow'
-import type { UiNode } from '@myt/device'
+import type {  } from '@myt/device'
 import {
   collectActionTargets,
   cropOfRegion,
@@ -50,10 +50,10 @@ export async function screenSizeOf(ctx: StepContext): Promise<ScreenSize> {
 /** 定位结果。 */
 export interface LocateOutcome {
   ok: boolean
-  point?: { x: number; y: number }
-  target?: ActionTarget
+  point?: { x: number; y: number } | undefined
+  target?: ActionTarget | undefined
   source: 'model' | 'vision' | 'fallback' | 'none'
-  reason?: string
+  reason?: string | undefined
   candidateCount: number
   ms: number
 }

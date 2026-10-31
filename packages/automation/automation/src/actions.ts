@@ -129,7 +129,7 @@ export async function typeWithVerify(
   ctx: StepContext,
   text: string,
   getPos: (root: UiNode) => InputPosition | Point | null,
-  stepName = '输入',
+  _stepName = '输入',
   extraTexts: readonly string[] = [],
   matchMode: MatchMode = 'exact',
 ): Promise<boolean> {

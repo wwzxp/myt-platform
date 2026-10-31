@@ -19,7 +19,7 @@ import {
 /** 图校验错误（带具体原因，方便定位是哪一行 JSON 写错了）。 */
 export class FlowGraphError extends Error {
   /** 出问题的节点 / 边 id（如有）。 */
-  readonly subject?: string
+  readonly subject?: string | undefined
 
   constructor(message: string, subject?: string) {
     super(message)

@@ -303,9 +303,9 @@ export interface GraphOutcome {
   /** 实际执行轨迹：节点 id → 走的端口。 */
   trail: Array<{ node: string; port?: PortId; ms: number }>
   /** 失败时停在哪个节点。 */
-  failedAt?: string
+  failedAt?: string | undefined
   /** 失败原因。 */
-  reason?: string
+  reason?: string | undefined
   /** 总耗时毫秒。 */
   ms: number
 }

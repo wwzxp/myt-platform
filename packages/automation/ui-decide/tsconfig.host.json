@@ -1,0 +1,18 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../ai/model/tsconfig.host.json"
+    },
+    {
+      "path": "../ui-perception/tsconfig.host.json"
+    }
+  ]
+}

@@ -9,13 +9,13 @@ import { ModelControl, type CompleteOptions } from '@myt/model'
  */
 export interface OpenAiModelConfig {
   /** 接口地址，默认 `http://127.0.0.1:11434/v1/chat/completions`。 */
-  baseUrl?: string
+  baseUrl?: string | undefined
   /** 模型名，默认 `minicpm46`。 */
-  model?: string
+  model?: string | undefined
   /** 单次超时（毫秒），默认 30 秒。 */
-  timeoutMs?: number
+  timeoutMs?: number | undefined
   /** 鉴权头（远端服务需要时）。 */
-  apiKey?: string
+  apiKey?: string | undefined
 }
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:11434/v1/chat/completions'
@@ -26,7 +26,7 @@ export class OpenAiModelControl extends ModelControl {
   private readonly baseUrl: string
   private readonly modelName: string
   private readonly timeoutMs: number
-  private readonly apiKey?: string
+  private readonly apiKey?: string | undefined
 
   constructor(ctx: Context, config: OpenAiModelConfig = {}) {
     super(ctx)
@@ -63,7 +63,7 @@ export class OpenAiModelControl extends ModelControl {
     }
 
     const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>
+      choices?: Array<{ message?: { content?: string } }> | undefined
     }
     const content = data.choices?.[0]?.message?.content
     if (typeof content !== 'string') {

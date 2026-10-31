@@ -1,5 +1,4 @@
 import type { FlowDefinition, StepContext } from '@myt/flow'
-import type { UiNode } from '@myt/device'
 import { sleep } from '@myt/human'
 import { clearInput, inputWithHumanLike, tapRepeatedly, waitSpinnerGone, type ActionContext } from '../steps/actions.ts'
 import { generateRandomAdultBirthday, scrollBirthdateTo } from '../steps/birthday.ts'
@@ -32,7 +31,6 @@ export const SEND_CODE_ROUNDS = 2
 export const MAX_LOGIN_ATTEMPTS = 2
 
 const XHS_PACKAGE = 'com.xingin.xhs'
-const XHS_PROFILE = 'xhsdiscover://profile'
 
 /** 旧实现的 `_last_error_reason`：只有这个原因会让外层不再重试。 */
 export const CODE_SEND_FAILED = '验证码发送失败'

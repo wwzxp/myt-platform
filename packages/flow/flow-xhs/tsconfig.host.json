@@ -1,0 +1,30 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../core/flow/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/runs/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/device/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/human/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/locator/tsconfig.host.json"
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { useClientContext, FlowNodeEntity } from '@flowgram.ai/free-layout-editor';
+import { useWorkflowContext } from '../../../context/workflow-context';
 import { Button, Badge } from '@douyinfe/semi-ui';
 import { IconPlay } from '@douyinfe/semi-icons';
 
@@ -25,12 +26,16 @@ export function TestRunButton(props: { disabled: boolean }) {
   /**
    * Validate all node and Save
    */
+  const workflow = useWorkflowContext();
+
   const onTestRun = useCallback(async () => {
     const allForms = clientContext.document.getAllNodes().map((node) => node.form);
     await Promise.all(allForms.map(async (form) => form?.validate()));
-    console.log('>>>>> save data: ', clientContext.document.toJSON());
+    // 先保存：Test Run 用内核里的最新版执行，不能跑旧图
+    if (!workflow) throw new Error('Test Run 失败：不在流程编辑器中');
+    await workflow.save();
     openPanel();
-  }, [clientContext]);
+  }, [workflow]);
 
   /**
    * Listen single node validate

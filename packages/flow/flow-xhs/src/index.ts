@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { FlowDefinition, StepContext } from '@myt/flow'
 import { sleep } from '@myt/human'
-import { inputWithHumanLike, tapRepeatedly, waitSpinnerGone } from './steps/actions.ts'
+import { inputWithHumanLike } from './steps/actions.ts'
 import {
   getBottomProfileButtonPosition,
   getClearPhoneButtonPosition,
@@ -12,8 +12,6 @@ import {
   getPhoneLoginButtonPosition,
   getRednoteNotificationAllowButtonPosition,
   getRednoteWelcomeAgreeButtonPosition,
-  getVerificationCodeInputPosition,
-  getVerifyLoginButtonInfo,
 } from './locators/locators.ts'
 import { getCountryCodeList } from './locators/state-locators.ts'
 import { getNetworkErrorCancelButtonPosition } from './locators/guide-locators.ts'
@@ -151,13 +149,13 @@ export interface PhoneLoginInput {
   /** 手机号（不含区号）。 */
   phone: string
   /** 区号，默认 +86。 */
-  countryCode?: string
+  countryCode?: string | undefined
   /** 取码来源；缺省时流程停在「等待验证码」，不进入验证码循环。 */
-  codeSource?: VerificationCodeSource
+  codeSource?: VerificationCodeSource | undefined
   /** 安全验证识图（2 张图的两位数答案）；缺省时跳过安全验证处理。 */
-  solveSafety?: (image: Buffer) => Promise<number>
+  solveSafety?: ((image: Buffer) => Promise<number>) | undefined
   /** 是否在发码后继续走验证码输入 + 引导页（默认 true）。 */
-  continueAfterSendCode?: boolean
+  continueAfterSendCode?: boolean | undefined
 }
 
 /**

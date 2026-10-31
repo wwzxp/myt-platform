@@ -6,7 +6,8 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win --x64 --publish never"
+    "dist": "node scripts/build.mjs && electron-builder --win --x64 --publish never",
+    "build:data-dir": "node scripts/build.mjs"
   },
   "build": {
     "appId": "com.myt.farm",
@@ -54,6 +55,7 @@
   "author": "MYT",
   "devDependencies": {
     "electron": "33.4.11",
-    "electron-builder": "25.1.8"
+    "electron-builder": "25.1.8",
+    "esbuild": "^0.24.0"
   }
 }

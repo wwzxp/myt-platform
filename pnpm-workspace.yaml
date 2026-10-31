@@ -2,5 +2,5 @@ packages:
   - "vendor/*"
   - "packages/*/*"
   - "!packages/vendor"
-  - "packages/native/system/packages/*"
+  - "native/system/packages/*"
   - "apps/*"

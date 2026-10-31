@@ -136,8 +136,8 @@ function findClickableText(
  */
 export function createModifyProfileFlow(input: {
   nickname: string
-  avatarPath?: string
-  imageMode?: 'random' | 'last' | 'first'
+  avatarPath?: string | undefined
+  imageMode?: 'random' | 'last' | 'first' | undefined
 }): FlowDefinition {
   const imageMode = input.imageMode ?? 'last'
   return {
@@ -360,8 +360,8 @@ export function createFollowUserFlow(input: { keywords: string[]; followCount: n
 export function createBindPhoneFlow(input: {
   phone: string
   countryCode: string
-  codeSource?: VerificationCodeSource
-  solveSafety?: (image: Buffer) => Promise<number>
+  codeSource?: VerificationCodeSource | undefined
+  solveSafety?: ((image: Buffer) => Promise<number>) | undefined
 }): FlowDefinition {
   return {
     id: 'xhs.device.bind-phone',

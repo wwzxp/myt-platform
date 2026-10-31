@@ -45,22 +45,15 @@ const ADB_KEYBOARD_IME = 'com.android.adbkeyboard/.AdbIME'
 
 export interface AdbProviderConfig {
   /** adb 可执行文件路径；默认取 PATH 里的 adb。 */
-  adbPath?: string
+  adbPath?: string | undefined
   /** ADBKeyboard.apk 本地路径；设备未安装时用于安装。 */
-  adbKeyboardApk?: string
+  adbKeyboardApk?: string | undefined
   /** 拟人化随机种子；给定后点击坐标与节奏可复现。 */
-  seed?: number
+  seed?: number | undefined
   /** 拟人化策略；缺省用旧实现参数。 */
-  humanPolicy?: HumanPolicy
+  humanPolicy?: HumanPolicy | undefined
   /** 单次命令超时。 */
-  timeoutMs?: number
-}
-
-interface RawBounds {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
+  timeoutMs?: number | undefined
 }
 
 /** 解析 `bounds="[x1,y1][x2,y2]"`；格式不符返回 null，由调用方显式失败。 */
@@ -603,3 +596,6 @@ export class AdbDeviceControl extends DeviceControl {
     ])
   }
 }
+
+/** Cordis Loader 按包名导入时要求默认导出。 */
+export default AdbDeviceControl

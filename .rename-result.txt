@@ -1,0 +1,6 @@
+﻿=== 鏀瑰悕鍓?===
+瀛樺湪: True
+澶辫触: 对路径的访问被拒绝。
+=== 鏀瑰悕鍚?===
+bash 瑙ｆ瀽: F:\tools\Git\Git\usr\bin\bash.exe
+uname: MSYS_NT-10.0-19045

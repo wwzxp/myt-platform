@@ -1,0 +1,2046 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MYT · 上号器</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --surface: #fff; --border: #e5e7eb; --text: #111827;
+    --muted: #6b7280; --accent: #2563eb; --green: #16a34a; --gray: #9ca3af;
+    --amber: #d97706; --red: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10; }
+  h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .spacer { flex: 1; }
+  select, input, button { font: inherit; color: inherit; border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 10px; background: var(--surface); }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  main { padding: 14px 18px 40px; max-width: 1500px; margin: 0 auto; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 10px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .row + .row { margin-top: 8px; }
+  .label { color: var(--muted); font-size: 12px; }
+  .table-wrap { max-height: calc(100vh - 300px); overflow: auto; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; background: #fafafa; position: sticky; top: 0; z-index: 1; }
+  tr:hover td { background: #fafbff; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .s-running { color: var(--accent); } .s-running .dot { background: var(--accent); }
+  .s-success { color: var(--green); } .s-success .dot { background: var(--green); }
+  .s-failed { color: var(--red); } .s-failed .dot { background: var(--red); }
+  .s-ready { color: var(--amber); } .s-ready .dot { background: var(--amber); }
+  .s-idle, .s-cancelled { color: var(--gray); } .s-idle .dot, .s-cancelled .dot { background: var(--gray); }
+  .muted { color: var(--muted); font-size: 12px; }
+  .dialog { position: fixed; inset: 0; background: rgba(17,24,39,.35); display: none;
+    align-items: center; justify-content: center; z-index: 50; }
+  .dialog.open { display: flex; }
+  .dialog .panel { background: var(--surface); border-radius: 14px; padding: 18px 20px;
+    min-width: 380px; max-width: 620px; box-shadow: 0 20px 40px rgba(0,0,0,.2); }
+  .dialog h2 { font-size: 14px; margin: 0 0 12px; }
+  .dialog label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+  .dialog input[type=number] { width: 80px; }
+  .dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .spin { width: 72px; }
+  .src-cell { cursor: pointer; color: var(--accent); }
+  .src-cell.empty { color: var(--muted); }
+  .src-cell:hover { text-decoration: underline; }
+  tr.group-row td { background: #f1f5f9; font-weight: 600; font-size: 12px; color: #475569; }
+  tr.group-row:hover td { background: #f1f5f9; }
+  .caret { cursor: pointer; user-select: none; display: inline-block; width: 14px; color: var(--muted); }
+  /* 旧 RowStatus 行底色：执行中蓝 / 成功绿 / 失败红 / 已取消黄 */
+  tr.row-running td { background: #dbeafe; }
+  tr.row-success td { background: #dcfce7; }
+  tr.row-failed td { background: #fee2e2; }
+  tr.row-cancelled td { background: #fef9c3; }
+  tr.row-running:hover td { background: #cfe3fd; }
+  tr.row-success:hover td { background: #d0f7dc; }
+  tr.row-failed:hover td { background: #fcd9d9; }
+  tr.row-cancelled:hover td { background: #fdf3b0; }
+  /* 旧版「设置」列按钮：白底灰框，运行中禁用 */
+  .set-btn { background: #fff; color: #1f2937; border: 1px solid #94a3b8;
+    border-radius: 8px; padding: 4px 12px; font-weight: 600; font-size: 12px; }
+  .set-btn:disabled { opacity: .45; cursor: not-allowed; }
+  tr.ctn-row td { font-size: 12px; color: var(--muted); background: #fafafa; }
+  .dialog textarea { width: 100%; min-height: 110px; font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; resize: vertical; }
+  .dialog .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  .dialog .field { margin-top: 10px; }
+  .dialog .field > .label { display: block; margin-bottom: 4px; }
+  .tabbar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; flex-wrap: wrap; }
+  .tab-btn { border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px;
+    font-size: 12px; color: var(--muted); background: transparent; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabpane { display: none; }
+  .tabpane.active { display: block; }
+  /* 旧 `reset_model_list`：固定高度、可滚动的多选清单 */
+  .checklist { max-height: 150px; overflow-y: auto; border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; margin-top: 8px; background: #fff; }
+  .checklist label { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MYT · 上号器</h1>
+  <select id="host"></select>
+  <div class="spacer"></div>
+  <span class="badge" id="health"><span class="dot" style="background:var(--gray)"></span><span>连接中</span></span>
+</header>
+
+<main>
+  <!-- 第一行：容器控制 + 单项任务（旧版 container_ctl_row） -->
+  <section class="card">
+    <div class="row">
+      <button id="refresh">刷新列表</button>
+      <label class="badge" title="勾选后设备行将展开显示所有容器坑位，支持按坑位切换执行任务"><input type="checkbox" id="multi" checked /> 坑位多容器运行</label>
+      <span class="label">切换超时(秒)</span><input class="spin" type="number" id="ctnTimeout" min="10" max="600" value="120" />
+      <span class="label">稳定等待(秒)</span><input class="spin" type="number" id="ctnStable" min="5" max="120" value="20" />
+      <div class="spacer"></div>
+      <button id="singleTask">单项任务</button>
+    </div>
+  </section>
+
+  <!-- 第二行：批量动作（旧版 action_row） -->
+  <section class="card">
+    <div class="row">
+      <button id="selectAll">全选</button>
+      <button id="llmConfig">大模型配置</button>
+      <button id="importAccounts">批导入账号</button>
+      <button id="viewLogs">查看日志</button>
+      <label class="badge"><input type="checkbox" id="loginAndBackup" /> 登录并备份</label>
+      <label class="badge" title="勾选后登录前清除数据，备份后也自动清除；不勾选则全程不清除"><input type="checkbox" id="clearData" checked /> 清除数据</label>
+      <div class="spacer"></div>
+      <button id="clearBtn">清除数据</button>
+      <button id="backupBtn">账号备份</button>
+      <button id="loginBtn" class="primary">立即登录</button>
+      <button id="cancelBtn">取消任务</button>
+    </div>
+  </section>
+
+  <div class="row" style="margin-bottom:6px">
+    <span class="label" style="font-weight:600;color:var(--text)">设备列表</span>
+    <div class="spacer"></div>
+    <button id="expandAll">展开全部</button>
+    <button id="collapseAll">折叠全部</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="deviceTable">
+      <colgroup>
+        <col style="width:36px" /><col style="width:30%" /><col /><col style="width:11%" />
+        <col style="width:9%" /><col style="width:108px" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="checkAll" /></th>
+          <th>设备地址</th>
+          <th>登录源</th>
+          <th>状态</th>
+          <th>耗时</th>
+          <th>设置</th>
+        </tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="6" class="muted" style="padding:28px;text-align:center">加载中…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <span class="muted" id="summary"></span>
+    <div class="spacer"></div>
+    <label class="badge"><input type="checkbox" id="autoRefresh" checked /> 自动刷新</label>
+  </div>
+</main>
+
+<div class="dialog" id="dlgSingle">
+  <div class="panel">
+    <h2>单项任务</h2>
+    <div id="singleList"></div>
+    <!-- 参数表单：由业务包的 ActionDefinition.params 动态渲染。 -->
+    <div id="singleForm" hidden></div>
+    <div class="foot">
+      <button data-close="dlgSingle">取消</button>
+      <button class="primary" id="singleConfirm">下一步</button>
+      <button class="primary" id="singleFormConfirm" hidden>确认执行</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dlgLogin">
+  <div class="panel" style="min-width:480px">
+    <h2>选择登录模式</h2>
+    <!-- 旧 LoginModeDialog：竖排三字段，字段名与顺序逐一对应 -->
+    <p class="hint" style="margin:0 0 10px">请选择本次立即登录要使用的模式</p>
+
+    <div class="field">
+      <span class="label">同 IP 同时启动</span>
+      <input class="spin" type="number" id="lmBatch" min="1" max="99" value="3" />
+    </div>
+    <div class="field">
+      <span class="label">批次间隔秒数</span>
+      <input class="spin" type="number" id="lmInterval" min="1" max="600" value="10" />
+    </div>
+    <div class="field">
+      <span class="label">登录循环次数（需勾选"登录并备份"，仅批量模式生效）</span>
+      <input class="spin" type="number" id="lmLoop" min="1" max="999" value="1" />
+    </div>
+    <div class="field">
+      <span class="label">失败设备自动拿号重试</span>
+      <input class="spin" type="number" id="lmRetry" min="0" max="99" value="0" />
+    </div>
+
+    <!-- 旧 `LoginSettingsDialog` 的 6 个复选框，顺序与旧版一致 -->
+    <div class="field" style="margin-top:12px">
+      <label><input type="checkbox" id="lmAvatar" /> 设置头像、昵称</label>
+      <label><input type="checkbox" id="lmProxy" /> 登录前设置魔云腾代理ip</label>
+      <label><input type="checkbox" id="lmReset" /> 登录前一键新机</label>
+      <label><input type="checkbox" id="lmFollow" /> 设置仅关注可评论</label>
+      <label><input type="checkbox" id="lmBind" /> 登录后绑定手机号</label>
+      <label><input type="checkbox" id="lmIme" checked /> 设置adb输入法</label>
+    </div>
+
+    <div style="margin-top:14px">
+      <button class="primary" id="lmBatchBtn" style="width:100%">批量导入登录</button>
+    </div>
+    <div style="margin-top:8px">
+      <button id="lmManualBtn" style="width:100%">手动设置登录</button>
+    </div>
+    <div class="foot">
+      <button data-close="dlgLogin">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dlgLlm">
+  <div class="panel">
+    <h2>大模型配置</h2>
+    <div class="muted" style="margin-bottom:8px">用于小红书安全验证 6 宫格识图</div>
+    <div class="label">API 地址</div>
+    <input id="llmBase" style="width:100%" placeholder="https://ark.cn-beijing.volces.com/api/v3" />
+    <div class="label" style="margin-top:8px">模型名称</div>
+    <input id="llmModel" style="width:100%" placeholder="doubao-seed-1-8-251228" />
+    <div class="label" style="margin-top:8px">API 秘钥</div>
+    <input id="llmKey" type="password" style="width:100%" placeholder="留空表示不修改" />
+    <div class="muted" id="llmHint" style="margin-top:6px"></div>
+    <div class="foot">
+      <button data-close="dlgLlm">关闭</button>
+      <button class="primary" id="llmSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dlgImport">
+  <div class="panel" style="min-width:820px;max-width:900px">
+    <h2>批导入账号</h2>
+    <!-- 旧 AccountImportDialog：8 个页签 -->
+    <div class="tabbar" id="impTabs">
+      <button class="tab-btn active" data-tab="account">账号</button>
+      <button class="tab-btn" data-tab="avatar">头像</button>
+      <button class="tab-btn" data-tab="nickname">昵称</button>
+      <button class="tab-btn" data-tab="proxy">魔云腾代理</button>
+      <button class="tab-btn" data-tab="reset">魔云腾新机配置(安卓12)</button>
+      <button class="tab-btn" data-tab="follow">关注账号</button>
+      <button class="tab-btn" data-tab="bind">绑定账号</button>
+      <button class="tab-btn" data-tab="herosms">HeroSMS</button>
+    </div>
+
+    <!-- ── Tab 1: 账号 ── -->
+    <div class="tabpane active" data-pane="account">
+      <div class="row" style="gap:14px">
+        <span class="label">导入模式</span>
+        <label class="badge"><input type="radio" name="im" value="sms" checked /> 验证码登录</label>
+        <label class="badge"><input type="radio" name="im" value="bundle" /> 备份包登录</label>
+        <label class="badge"><input type="radio" name="im" value="op" /> QQ OP登录</label>
+        <label class="badge"><input type="radio" name="im" value="v" /> V跳登录</label>
+        <label class="badge"><input type="radio" name="im" value="sid" /> SID登录</label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="label" id="impAreaLabel">区号</span>
+        <input id="impAreaCode" class="spin" style="width:110px" value="+1" placeholder="+1" />
+        <button id="impChooseFile">选择文件</button>
+        <div class="spacer"></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <span class="label">源文件路径</span>
+        <input id="impFilePath" style="flex:1" placeholder="可选：状态会回写到这个 txt" />
+      </div>
+      <div class="muted" id="impFileHint" style="margin:8px 0">未选择文件</div>
+      <div class="table-wrap" style="max-height:260px">
+        <table>
+          <colgroup><col style="width:72px" /><col /><col style="width:120px" /></colgroup>
+          <thead><tr><th>序号</th><th>账号信息</th><th>状态</th></tr></thead>
+          <tbody id="impAccountRows"><tr><td colspan="3" class="muted" style="padding:18px;text-align:center">未导入</td></tr></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="impExportFailed">导出失败账号</button>
+        <div class="spacer"></div>
+      </div>
+    </div>
+
+    <!-- ── Tab 2: 头像 ── -->
+    <div class="tabpane" data-pane="avatar">
+      <div class="row"><button id="impAvatarChoose">选择文件夹</button><div class="spacer"></div></div>
+      <div class="muted" id="impAvatarHint" style="margin:8px 0">未选择文件夹</div>
+      <div class="table-wrap" style="max-height:300px">
+        <table>
+          <colgroup><col /><col style="width:120px" /></colgroup>
+          <thead><tr><th>图片路径</th><th>状态</th></tr></thead>
+          <tbody id="impAvatarRows"><tr><td colspan="2" class="muted" style="padding:18px;text-align:center">未导入</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Tab 3: 昵称 ── -->
+    <div class="tabpane" data-pane="nickname">
+      <div class="row"><button id="impNicknameChoose">选择 TXT 文件</button><div class="spacer"></div></div>
+      <div class="row" style="margin-top:6px">
+        <span class="label">源文件路径</span>
+        <input id="impNicknamePath" style="flex:1" placeholder="可选：已使用的昵称会加前缀回写" />
+      </div>
+      <div class="muted" id="impNicknameHint" style="margin:8px 0">未选择文件</div>
+      <div class="table-wrap" style="max-height:300px">
+        <table>
+          <colgroup><col /><col style="width:120px" /></colgroup>
+          <thead><tr><th>昵称</th><th>状态</th></tr></thead>
+          <tbody id="impNicknameRows"><tr><td colspan="2" class="muted" style="padding:18px;text-align:center">未导入</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Tab 4: 魔云腾代理 ── -->
+    <div class="tabpane" data-pane="proxy">
+      <div class="row"><button id="impProxyChoose">选择 TXT 文件</button><div class="spacer"></div></div>
+      <div class="row" style="margin-top:6px">
+        <span class="label">源文件路径</span>
+        <input id="impProxyPath" style="flex:1" placeholder="可选：代理状态会作为前缀回写" />
+      </div>
+      <div class="muted" id="impProxyHint" style="margin:8px 0">未选择文件</div>
+      <div class="row">
+        <input id="impProxyMachines" class="spin" type="number" min="1" max="9999" value="1" />
+        <span class="label">机</span>
+        <input id="impProxyIpCount" class="spin" type="number" min="1" max="9999" value="1" disabled />
+        <span class="label">ip</span>
+      </div>
+      <div class="table-wrap" style="max-height:240px;margin-top:8px">
+        <table>
+          <colgroup><col style="width:72px" /><col /><col style="width:120px" /></colgroup>
+          <thead><tr><th>序号</th><th>代理ip(sk5)</th><th>状态</th></tr></thead>
+          <tbody id="impProxyRows"><tr><td colspan="3" class="muted" style="padding:18px;text-align:center">未导入</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Tab 5: 魔云腾新机配置(安卓12) ── -->
+    <div class="tabpane" data-pane="reset">
+      <div class="row" style="gap:14px">
+        <span class="label">新机模式</span>
+        <label class="badge"><input type="radio" name="rsMode" value="random" checked /> 随机机型</label>
+        <label class="badge"><input type="radio" name="rsMode" value="specified" /> 指定机型</label>
+        <label class="badge"><input type="checkbox" id="impOverseas" /> 海外随机</label>
+        <div class="spacer"></div>
+      </div>
+
+      <!-- 指定机型面板（旧 `reset_specified_panel`，仅指定模式显示） -->
+      <div id="impSpecifiedPanel" hidden style="margin-top:10px">
+        <div class="muted" id="impSpecifiedHint" style="margin-bottom:8px"></div>
+        <div class="row">
+          <span class="label">品牌:</span>
+          <select id="impBrand" style="min-width:160px"><option value="">（点击刷新加载）</option></select>
+          <button id="impLoadModels">刷新</button>
+          <div class="spacer"></div>
+        </div>
+        <div class="checklist" id="impModelList"></div>
+      </div>
+
+      <div class="table-wrap" style="max-height:240px;margin-top:8px">
+        <table>
+          <colgroup><col style="width:50px" /><col /><col /><col style="width:60px" /></colgroup>
+          <thead><tr><th>序号</th><th>品牌</th><th>型号</th><th>操作</th></tr></thead>
+          <tbody id="impResetRows"><tr><td colspan="4" class="muted" style="padding:18px;text-align:center">未配置</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Tab 6: 关注账号 ── -->
+    <div class="tabpane" data-pane="follow">
+      <div class="muted" style="margin:4px 0 8px">一行一个小红书号，用于搜索后批量关注</div>
+      <textarea id="impFollowUsers" placeholder="49314148071&#10;49314148072&#10;..."></textarea>
+      <div class="row" style="margin-top:8px">
+        <span class="label">关注数量</span>
+        <input id="impFollowCount" class="spin" type="number" min="1" max="999" value="1" />
+        <div class="spacer"></div>
+      </div>
+    </div>
+
+    <!-- ── Tab 7: 绑定账号 ── -->
+    <div class="tabpane" data-pane="bind">
+      <div class="row">
+        <button class="primary" id="impBindChoose">选择文件</button>
+        <button id="impBindExport">导出未成功账号</button>
+        <div class="spacer"></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <span class="label">源文件路径</span>
+        <input id="impBindPath" style="flex:1" placeholder="可选：绑定状态会回写到这个 txt" />
+      </div>
+      <div class="muted" id="impBindHint" style="margin:8px 0">未选择文件</div>
+      <div class="table-wrap" style="max-height:300px">
+        <table>
+          <colgroup><col style="width:72px" /><col /><col /><col style="width:120px" /></colgroup>
+          <thead><tr><th>序号</th><th>手机号</th><th>链接</th><th>状态</th></tr></thead>
+          <tbody id="impBindRows"><tr><td colspan="4" class="muted" style="padding:18px;text-align:center">未导入</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Tab 8: HeroSMS ── -->
+    <div class="tabpane" data-pane="herosms">
+      <!-- 配置行：启用开关 + API Key + 清除已导入 -->
+      <div class="row">
+        <label class="badge"><input type="checkbox" id="impHeroEnabled" /> 启用 HeroSMS 登录</label>
+        <span class="label">API Key</span>
+        <input id="impHeroApiKey" style="flex:1" placeholder="请输入 HeroSMS API Key" />
+        <button id="impHeroClear">清除已导入账号</button>
+      </div>
+
+      <!-- 国家 -->
+      <div class="row" style="margin-top:10px">
+        <button id="impHeroFetchCountries">获取国家</button>
+        <select id="impHeroCountry" style="min-width:180px"><option value="">（未获取）</option></select>
+        <span class="label">区号</span>
+        <input id="impHeroCountryCode" class="spin" style="width:80px" placeholder="+86" />
+        <input id="impHeroCountrySearch" class="spin" style="width:200px" placeholder="输入国家名称 / 国家ID / 区号筛选" />
+        <div class="spacer"></div>
+      </div>
+      <div class="muted" id="impHeroCountryLabel" style="margin:6px 0">国家：未查询</div>
+
+      <!-- 项目价格 -->
+      <div class="row">
+        <button id="impHeroFetchPrices">获取项目价格</button>
+        <div class="spacer"></div>
+      </div>
+      <div class="table-wrap" style="max-height:150px;margin-top:6px">
+        <table>
+          <colgroup><col style="width:100px" /><col style="width:90px" /><col /></colgroup>
+          <thead><tr><th>价格</th><th>库存</th><th>实体库存</th></tr></thead>
+          <tbody id="impHeroPriceRows"><tr><td colspan="3" class="muted" style="padding:14px;text-align:center">未查询</td></tr></tbody>
+        </table>
+      </div>
+      <div class="muted" id="impHeroPriceLabel" style="margin:6px 0">项目：未查询</div>
+
+      <!-- 余额 -->
+      <div class="row">
+        <button id="impHeroFetchBalance">获取余额</button>
+        <span class="muted" id="impHeroBalance">未查询</span>
+        <div class="spacer"></div>
+      </div>
+
+      <!-- 活动号码 -->
+      <div class="row" style="margin-top:10px">
+        <button id="impHeroFetchActive">获取活动号码</button>
+        <div class="spacer"></div>
+      </div>
+      <div class="table-wrap" style="max-height:180px;margin-top:6px">
+        <table>
+          <thead><tr>
+            <th>激活ID</th><th>项目</th><th>国家</th><th>手机号</th><th>价格</th>
+            <th>状态</th><th>验证码</th><th>短信内容</th><th>获取时间</th><th>可再收码</th><th>操作</th>
+          </tr></thead>
+          <tbody id="impHeroActiveRows"><tr><td colspan="11" class="muted" style="padding:14px;text-align:center">未查询</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="foot">
+      <button data-close="dlgImport">关闭</button>
+      <button class="primary" id="impSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dlgSource">
+  <div class="panel" style="min-width:560px">
+    <h2>设置登录源</h2>
+    <!-- 旧 DeviceSourceDialog：三个单选横排（备份包 / sid----uid / 验证码登录） -->
+    <div class="row" style="gap:14px;margin-bottom:10px">
+      <label class="badge"><input type="radio" name="srcKind" value="bundle" /> 备份包</label>
+      <label class="badge"><input type="radio" name="srcKind" value="sid" /> sid----uid</label>
+      <label class="badge"><input type="radio" name="srcKind" value="sms" /> 验证码登录</label>
+    </div>
+
+    <!-- 备份包：路径 + 浏览 -->
+    <div data-srcpanel="bundle">
+      <div class="row">
+        <input id="srcBundle" style="flex:1" placeholder=".zip / .tar.bak / .bak / 目录路径" />
+        <button id="srcBrowse">浏览</button>
+      </div>
+    </div>
+    <!-- sid----uid -->
+    <div data-srcpanel="sid" hidden>
+      <input id="srcSid" style="width:100%" placeholder="sid----uid" />
+    </div>
+    <!-- 验证码登录：区号 + 手机号----URL -->
+    <div data-srcpanel="sms" hidden>
+      <div class="row">
+        <input id="srcCountryCode" class="spin" style="width:80px" value="+1" placeholder="+1" />
+        <input id="srcSms" style="flex:1" placeholder="手机号----验证码网页URL" />
+      </div>
+    </div>
+
+    <div class="foot">
+      <button data-close="dlgSource">取消</button>
+      <button class="primary" id="srcConfirm">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dlgSid">
+  <div class="panel" style="min-width:520px">
+    <h2>SID 上号（写 MMKV，需 root）<span class="muted" id="sidCount" style="margin-left:8px"></span></h2>
+    <div class="field">
+      <span class="label">每行一条：sid,userid</span>
+      <textarea id="sidInput" placeholder="1792769561204765787689,6adb7e190000000005007801"></textarea>
+      <p class="hint">按选中设备顺序逐条分配；条数少于设备数时，多余设备跳过。</p>
+    </div>
+    <div class="foot">
+      <button data-close="dlgSid">取消</button>
+      <button id="sidExtractBtn">先提取当前 SID</button>
+      <button class="primary" id="sidConfirm">开始上号</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dlgRestore">
+  <div class="panel" style="min-width:520px">
+    <h2>恢复登录态备份包（需 root）</h2>
+    <div class="field">
+      <span class="label">备份源（.zip 直接用；.bak / .tar.bak / 目录 会自动转换）</span>
+      <input id="restoreDir" style="width:100%" placeholder="F:\\backup\\xhs_state.zip 或 F:\\backup\\App 或 xxx.bak" />
+      <p class="hint">转换规则同旧版：<code>.zip</code> 直接恢复；MIUI <code>*.bak</code> 与 WeShare <code>.tar.bak</code> 先转成 bundle。</p>
+    </div>
+    <div class="field">
+      <span class="label">恢复范围</span>
+      <label><input type="radio" name="rmode" value="core" checked /> core（仅登录 4 文件）</label>
+      <label><input type="radio" name="rmode" value="full" /> full（含设备上下文/辅助/shared_prefs，22 文件）</label>
+    </div>
+    <div class="field">
+      <label><input type="checkbox" id="restoreLaunch" /> 恢复后拉起 App</label>
+    </div>
+    <div class="foot">
+      <button data-close="dlgRestore">取消</button>
+      <button class="primary" id="restoreConfirm">开始恢复</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dlgLogs">
+  <div class="panel">
+    <h2>运行日志</h2>
+    <pre id="logBody" style="max-height:420px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:10px;border-radius:8px;font-size:12px"></pre>
+    <div class="foot"><button data-close="dlgLogs">关闭</button></div>
+  </div>
+</div>
+
+<script type="module">
+const state = {
+  host: null,
+  rows: [],
+  selected: new Set(),
+  /** 业务包声明的动作清单（由 /api/tabs/login/tasks 提供）。 */
+  actions: [],
+  logs: [],
+  timer: null,
+  /** 已折叠的宿主 IP（旧版 expanded_keys 的反向记录）。 */
+  collapsed: new Set(),
+  /** 当前正在编辑登录源的设备行。 */
+  editingSource: null,
+  /** 批导入账号对话框的各类清单（旧版 8 个页签各自的数据）。 */
+  imported: [],
+  avatars: [],
+  nicknames: [],
+  proxies: [],
+  bindAccounts: [],
+  /** 新机配置已选机型（旧 `reset_device_brand_models`）。 */
+  resetModels: [],
+  /** HeroSMS 国家清单（旧 `herosms_countries`）。 */
+  heroCountries: [],
+  /** HeroSMS 价格档（旧 `herosms_price_options`）。 */
+  heroPrices: [],
+  /** 选中的最高价（旧 `herosms_max_price`）。 */
+  heroMaxPrice: null,
+};
+// `state.multi` 直接绑定「坑位多容器运行」复选框。
+Object.defineProperty(state, 'multi', {
+  get() { return Boolean($('multi')?.checked); },
+});
+const $ = (id) => document.getElementById(id);
+const api = async (path, options) => {
+  const res = await fetch(path, { cache: 'no-store', ...options });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+};
+
+const STATUS_TEXT = { idle: '待命', ready: '已配置', running: '执行中', success: '成功', failed: '失败', cancelled: '已取消' };
+const statusBadge = (s) => `<span class="badge s-${s}"><span class="dot"></span>${STATUS_TEXT[s] ?? s}</span>`;
+const fmtDuration = (ms) => {
+  if (!ms) return '—';
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${s % 60}s`;
+};
+
+/**
+ * 容器短名（旧 `rebuild_table`：`"_".join(raw.split("_")[2:])`）。
+ *
+ * 原始名形如 `2117af99..._1_copy-3`，取第 3 段及之后 → `copy-3`。
+ */
+function ctnLabel(row) {
+  const raw = row.containers?.[0]?.name ?? '';
+  if (!raw) return '(未知容器)';
+  const parts = raw.split('_');
+  return parts.length > 2 ? parts.slice(2).join('_') : raw;
+}
+
+function render() {
+  const rows = state.rows;
+  $('summary').textContent = `共 ${rows.length} 台 · 已选 ${state.selected.size} · 执行中 ${rows.filter((r) => r.status === 'running').length}`;
+  if (!rows.length) {
+    $('rows').innerHTML = '<tr><td colspan="6" class="muted" style="padding:28px;text-align:center">没有设备</td></tr>';
+    return;
+  }
+
+  // 旧版三层树：宿主组(`__group__|<ip>`) → 设备(serial) → 容器(`__ctn__|<serial>|<全名>`)
+  const groups = new Map();
+  for (const row of rows) {
+    const ip = row.hostIp || '(未知宿主)';
+    if (!groups.has(ip)) groups.set(ip, []);
+    groups.get(ip).push(row);
+  }
+
+  const html = [];
+  for (const [ip, items] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const collapsed = state.collapsed.has(ip);
+    const picked = items.filter((r) => state.selected.has(r.deviceId)).length;
+    html.push(`<tr class="group-row">
+      <td><input type="checkbox" data-group="1" data-ip="${ip}" /></td>
+      <td colspan="5"><span class="caret" data-toggle="${ip}">${collapsed ? '▸' : '▾'}</span> ${ip}（${items.length} 台）</td>
+    </tr>`);
+    if (collapsed) continue;
+
+    for (const row of items) {
+      const running = row.status === 'running';
+      const checked = state.selected.has(row.deviceId) ? 'checked' : '';
+      const disabled = running ? 'disabled title="该设备任务执行中，暂时不可修改登录源"' : '';
+      const ctn = row.containers?.[0] ?? {};
+      const ctnName = ctn.name ?? '';
+      // 旧 `RowStatus` → 行底色（执行中蓝/成功绿/失败红/已取消黄）
+      const rowClass = `row-${row.status}`;
+      const srcText = row.source?.summary || '';
+      html.push(`<tr class="${rowClass}">
+      <td><input type="checkbox" data-sel="${row.deviceId}" ${checked} ${running ? 'disabled' : ''} /></td>
+      <td class="mono">${row.serial || '<span class="muted">（未运行）</span>'}</td>
+      <td class="${srcText ? '' : 'muted'}">${srcText || '未设置登录源'}</td>
+      <td>${statusBadge(row.status)}</td>
+      <td class="muted">${fmtDuration(row.duration)}</td>
+      <td><button class="set-btn" data-src="${row.deviceId}" ${disabled}>设置</button></td>
+    </tr>`);
+
+      // 勾选「坑位多容器运行」时展开容器子行（旧 `__ctn__`）
+      if (state.multi && ctnName) {
+        // 旧版：容器子行可勾选（父行未选中时才给 ItemIsUserCheckable）
+        const ctnChecked = ctn.selected ? 'checked' : '';
+        const ctnDisabled = checked ? '' : 'disabled';
+        html.push(`<tr class="ctn-row">
+          <td><input type="checkbox" data-ctn-sel="${row.deviceId}" data-ctn-name="${ctnName}" ${ctnChecked} ${ctnDisabled} /></td>
+          <td class="mono" data-ctn="${row.deviceId}">${ctnLabel(row)}</td>
+          <td class="muted">${row.source?.summary || ''}</td>
+          <td>${statusBadge(row.status)}</td>
+          <td class="muted">${fmtDuration(row.duration)}</td>
+          <td></td>
+        </tr>`);
+      }
+    }
+  }
+  $('rows').innerHTML = html.join('');
+
+  // 三态勾选：indeterminate 只能通过属性设置
+  for (const box of document.querySelectorAll('input[data-group]')) {
+    const items = rows.filter((r) => (r.hostIp || '(未知宿主)') === box.dataset.ip);
+    const picked = items.filter((r) => state.selected.has(r.deviceId)).length;
+    box.checked = picked > 0;
+    box.indeterminate = picked > 0 && picked < items.length;
+  }
+  syncSelectAllLabel();
+}
+
+async function load() {
+  try {
+    const { rows } = await api(`/api/tabs/login/rows?host=${encodeURIComponent(state.host)}`);
+    // 刷新时保留容器勾选状态（旧版 rebuild_table 也会保留 `cs.selected`）。
+    const previous = new Map();
+    for (const row of state.rows) {
+      previous.set(row.deviceId, new Map((row.containers ?? []).map((c) => [c.name, c.selected])));
+    }
+    for (const row of rows) {
+      const saved = previous.get(row.deviceId);
+      if (!saved) continue;
+      for (const ctn of row.containers ?? []) {
+        if (saved.has(ctn.name)) ctn.selected = saved.get(ctn.name);
+      }
+    }
+    state.rows = rows;
+    render();
+    $('health').innerHTML = '<span class="dot" style="background:var(--green)"></span><span>宿主在线</span>';
+  } catch (error) {
+    $('health').innerHTML = '<span class="dot" style="background:var(--red)"></span><span>宿主离线</span>';
+    $('rows').innerHTML = `<tr><td colspan="7" class="muted" style="padding:28px;text-align:center">${error.message}</td></tr>`;
+  }
+}
+
+async function loadHosts() {
+  const hosts = await api('/api/hosts');
+  $('host').innerHTML = hosts.map((h) => `<option value="${h.ip}">${h.ip}${h.online ? '' : ' · 离线'}</option>`).join('');
+  state.host = hosts[0]?.ip ?? null;
+  $('host').value = state.host;
+}
+
+/**
+ * 打开弹窗。
+ *
+ * 旧版 Qt 用 `setModal(true)` 保证同一时刻只有一个对话框；
+ * 这里显式关掉其它弹窗，避免叠层（实测会出现「SID 上号」盖住「单项任务」）。
+ */
+function openDialog(id) {
+  for (const other of document.querySelectorAll('.dialog.open')) {
+    if (other.id !== id) other.classList.remove('open');
+  }
+  $(id).classList.add('open');
+}
+function closeDialog(id) { $(id).classList.remove('open'); }
+document.querySelectorAll('[data-close]').forEach((btn) => {
+  btn.addEventListener('click', () => closeDialog(btn.dataset.close));
+});
+
+function selection() { return state.rows.filter((r) => state.selected.has(r.deviceId)); }
+
+/**
+ * 旧 `runnable_selected_rows`：只挑「没有任务在执行」的设备。
+ *
+ * 旧版靠 `active_job_id` 判定，这里用 `status === 'running'`。
+ * 返回 { runnable, busy }，由调用方决定是跳过还是提示。
+ */
+function runnableSelection() {
+  const rows = selection();
+  return {
+    runnable: rows.filter((r) => r.status !== 'running'),
+    busy: rows.filter((r) => r.status === 'running'),
+  };
+}
+
+async function runBatch(action) {
+  const rows = selection();
+  if (!rows.length) { alert('请先选择设备'); return; }
+  try {
+    const check = await api('/api/tabs/login/check', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, rows, multiContainer: $('multi').checked }),
+    });
+    if (!check.ok) { alert(check.reason); return; }
+    if (check.skipped?.length) {
+      if (!confirm(`以下设备已有任务，将自动跳过：\n${check.skipped.join('\n')}\n\n继续？`)) return;
+    }
+    const serials = rows.map((r) => r.serial || '(未运行)').join('\n');
+    if (!confirm(`即将对以下设备执行「${ACTION_NAME[action]}」：\n${serials}`)) return;
+    const result = await api('/api/tabs/login/batch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, rows: rows.map((r) => ({ deviceId: r.deviceId, serial: r.serial })) }),
+    });
+    const failed = result.accepted.filter((item) => item.error);
+    for (const item of result.accepted) {
+      state.logs.push(`[${new Date().toLocaleTimeString()}] ${item.serial || item.deviceId} → ${ACTION_NAME[action]}${item.error ? ' 跳过: ' + item.error : ''}`);
+    }
+    if (failed.length) alert(`${failed.length} 台未能提交：\n${failed.map((f) => f.serial + ' ' + f.error).join('\n')}`);
+    await load();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+const ACTION_NAME = { clear: '清除数据', backup: '账号备份', login: '立即登录', 'ui-dump': '抓取界面XML' };
+
+$('host').addEventListener('change', (e) => { state.host = e.target.value; load(); });
+$('refresh').addEventListener('click', load);
+/**
+ * 选中模型（1:1 复刻旧 `on_tree_item_changed`）。
+ *
+ * 旧版有两条独立的状态：
+ * - `row.selected`       设备行勾选
+ * - `container.selected` 容器坑位勾选（多容器模式下逐个子行）
+ *
+ * 三条规则必须照搬：
+ * 1. 取消设备勾选时，容器选择**回落**到当前 running 的那个
+ * 2. 勾选设备勾选时，不改容器选择
+ * 3. 非多容器模式下勾选某容器 → 同设备的兄弟容器互斥（只能选一个）
+ */
+function resetContainersToRunning(row) {
+  const runningName = row.containers?.find((c) => c.state === 'running')?.name ?? '';
+  for (const ctn of row.containers ?? []) {
+    ctn.selected = ctn.name === runningName;
+  }
+}
+
+/** 三态同步：设备勾选变化后，重算所属宿主组的组头状态。 */
+function syncGroupState(ip) {
+  const box = document.querySelector(`input[data-group][data-ip="${CSS.escape(ip)}"]`);
+  if (!box) return;
+  const items = state.rows.filter((r) => (r.hostIp || '(未知宿主)') === ip);
+  const picked = items.filter((r) => state.selected.has(r.deviceId)).length;
+  box.checked = picked > 0;
+  box.indeterminate = picked > 0 && picked < items.length;
+}
+
+$('rows').addEventListener('change', (e) => {
+  const dataset = e.target.dataset ?? {};
+
+  // ── 组头勾选（旧 `__group__` 分支）──
+  if (dataset.group) {
+    const ip = dataset.ip;
+    for (const row of state.rows) {
+      if ((row.hostIp || '(未知宿主)') !== ip) continue;
+      if (e.target.checked) state.selected.add(row.deviceId);
+      else {
+        state.selected.delete(row.deviceId);
+        // 规则 1：取消时容器回落到 running 的那个
+        resetContainersToRunning(row);
+      }
+    }
+    render();
+    return;
+  }
+
+  // ── 容器子行勾选（旧 `__ctn__` 分支）──
+  if (dataset.ctnSel) {
+    const row = state.rows.find((r) => r.deviceId === dataset.ctnSel);
+    if (!row) return;
+    const ctn = row.containers?.find((c) => c.name === dataset.ctnName);
+    if (!ctn) return;
+    ctn.selected = e.target.checked;
+    // 规则 3：非多容器模式下同设备容器互斥
+    if (e.target.checked && !state.multi) {
+      for (const other of row.containers ?? []) {
+        if (other.name !== ctn.name) other.selected = false;
+      }
+    }
+    render();
+    return;
+  }
+
+  // ── 设备行勾选（旧 `elif data:` 分支）──
+  const id = dataset.sel;
+  if (!id) return;
+  const row = state.rows.find((r) => r.deviceId === id);
+  if (e.target.checked) state.selected.add(id);
+  else {
+    state.selected.delete(id);
+    // 规则 1
+    if (row) resetContainersToRunning(row);
+  }
+  // 规则：勾选不变更容器选择；随后同步组头三态
+  if (row) syncGroupState(row.hostIp || '(未知宿主)');
+  render();
+});
+
+// 旧版全选按钮文案随状态切换（`全选` / `取消全选`）。
+function syncSelectAllLabel() {
+  const all = state.rows.length > 0 && state.selected.size === state.rows.length;
+  $('selectAll').textContent = all ? '取消全选' : '全选';
+  $('checkAll').checked = all;
+}
+
+$('checkAll').addEventListener('change', (e) => {
+  if (e.target.checked) {
+    state.selected = new Set(state.rows.map((r) => r.deviceId));
+  } else {
+    state.selected = new Set();
+    for (const row of state.rows) resetContainersToRunning(row);
+  }
+  render();
+});
+$('selectAll').addEventListener('click', () => {
+  const all = state.rows.length > 0 && state.selected.size === state.rows.length;
+  if (all) {
+    state.selected = new Set();
+    for (const row of state.rows) resetContainersToRunning(row);
+  } else {
+    state.selected = new Set(state.rows.map((r) => r.deviceId));
+  }
+  render();
+});
+
+// 旧 `_on_tree_item_double_clicked`：双击容器名复制全名。
+$('rows').addEventListener('dblclick', async (e) => {
+  const id = e.target.dataset?.ctn;
+  if (!id) return;
+  const row = state.rows.find((r) => r.deviceId === id);
+  const name = row?.containers?.[0]?.name;
+  if (!name) return;
+  try {
+    await navigator.clipboard.writeText(name);
+    state.logs.push(`[${new Date().toLocaleTimeString()}] [复制] 容器全名已复制: ${name}`);
+  } catch {
+    // 非安全上下文（file://）下 clipboard API 不可用，退化为提示。
+    alert(`容器全名：\n${name}`);
+  }
+});
+
+/**
+ * 切换登录源输入区（旧 `on_import_mode_changed`）。
+ *
+ * 旧版只在 SMS 模式显示区号，其余模式隐藏。
+ */
+function syncSourcePanels() {
+  const kind = document.querySelector('input[name=srcKind]:checked')?.value ?? 'bundle';
+  for (const panel of document.querySelectorAll('[data-srcpanel]')) {
+    panel.hidden = panel.dataset.srcpanel !== kind;
+  }
+}
+
+for (const radio of document.querySelectorAll('input[name=srcKind]')) {
+  radio.addEventListener('change', syncSourcePanels);
+}
+
+// 旧 `edit_row_source`：点「设置」按钮打开编辑框。
+$('rows').addEventListener('click', (e) => {
+  const btn = e.target.closest('.set-btn');
+  const id = btn?.dataset?.src;
+  if (!id || btn.disabled) return;
+  const row = state.rows.find((r) => r.deviceId === id);
+  if (!row) return;
+  state.editingSource = row;
+
+  const src = row.source ?? { kind: 'none', value: '' };
+  // 旧 `DeviceSource`：kind 为空时默认落在「备份包」页签。
+  const kind = ['bundle', 'sid', 'sms'].includes(src.kind) ? src.kind : 'bundle';
+  for (const radio of document.querySelectorAll('input[name=srcKind]')) {
+    radio.checked = radio.value === kind;
+  }
+  $('srcBundle').value = kind === 'bundle' ? src.value : '';
+  $('srcSid').value = kind === 'sid' ? src.value : '';
+  if (kind === 'sms') {
+    // 旧版存 `区号-值`（注意是单横线，与 sid 的四横线不同）。
+    const matched = /^(\+\d+)-(.*)$/.exec(src.value ?? '');
+    $('srcCountryCode').value = matched ? matched[1] : '+1';
+    $('srcSms').value = matched ? matched[2] : src.value ?? '';
+  } else {
+    $('srcCountryCode').value = '+1';
+    $('srcSms').value = '';
+  }
+  syncSourcePanels();
+  openDialog('dlgSource');
+});
+
+$('srcBrowse').addEventListener('click', () => {
+  // 浏览器无法选目录并取真实路径，提示用户手填（桌面端由壳提供真实选择）。
+  alert('请在输入框中填写备份包的完整路径（.zip / .tar.bak / .bak / 目录）');
+});
+
+$('srcConfirm').addEventListener('click', async () => {
+  const row = state.editingSource;
+  if (!row) { closeDialog('dlgSource'); return; }
+  const kind = document.querySelector('input[name=srcKind]:checked')?.value ?? 'bundle';
+  // 旧 `device_source()`：SMS 拼成 `区号-值`，其余原样。
+  const value = kind === 'bundle'
+    ? $('srcBundle').value.trim()
+    : kind === 'sid'
+      ? $('srcSid').value.trim()
+      : `${$('srcCountryCode').value.trim() || '+1'}-${$('srcSms').value.trim()}`;
+  try {
+    await api('/api/tabs/login/source', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ deviceId: row.deviceId, kind, value }),
+    });
+    state.logs.push(`[${new Date().toLocaleTimeString()}] ${row.serial || row.deviceId} 登录源已更新`);
+    state.editingSource = null;
+    closeDialog('dlgSource');
+    await load();
+  } catch (error) { alert(error.message); }
+});
+
+$('clearBtn').addEventListener('click', () => runBatch('clear'));
+$('backupBtn').addEventListener('click', () => runBatch('backup'));
+$('loginBtn').addEventListener('click', () => openDialog('dlgLogin'));
+$('cancelBtn').addEventListener('click', async () => {
+  const targets = selection().length ? selection() : state.rows.filter((r) => r.status === 'running');
+  if (!targets.length) { alert('没有可取消的任务'); return; }
+  if (!confirm(`取消 ${targets.length} 台设备上运行中的任务？\n（协作式：当前步骤结束后停止）`)) return;
+  try {
+    const result = await api('/api/tabs/login/cancel', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ deviceIds: targets.map((r) => r.deviceId) }),
+    });
+    state.logs.push(`[${new Date().toLocaleTimeString()}] 取消请求：${result.signalled}/${result.requested} 已发出信号`);
+    await load();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+$('viewLogs').addEventListener('click', () => {
+  $('logBody').textContent = state.logs.join('\n') || '(暂无日志)';
+  openDialog('dlgLogs');
+});
+$('llmConfig').addEventListener('click', async () => {
+  try {
+    const config = await api('/api/tabs/login/llm');
+    $('llmBase').value = config.baseUrl || '';
+    $('llmModel').value = config.model || '';
+    $('llmKey').value = '';
+    $('llmHint').textContent = config.configured
+      ? `已配置：${config.apiKeyMasked}（留空表示不修改）`
+      : '尚未配置，安全验证识图会跳过';
+    openDialog('dlgLlm');
+  } catch (error) { alert(error.message); }
+});
+
+$('llmSave').addEventListener('click', async () => {
+  try {
+    const body = { baseUrl: $('llmBase').value.trim(), model: $('llmModel').value.trim() };
+    const key = $('llmKey').value.trim();
+    if (key) body.apiKey = key;
+    const saved = await api('/api/tabs/login/llm', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+    state.logs.push(`[${new Date().toLocaleTimeString()}] 大模型配置已保存（${saved.model}）`);
+    closeDialog('dlgLlm');
+  } catch (error) { alert(error.message); }
+});
+
+const IMPORT_PLACEHOLDER = {
+  sms: '手机号----验证码链接（每行一条）',
+  bundle: 'zip 文件路径（每行一条）\n名字----成功 / 名字----失败',
+  op: 'OP 数据（每行一份）',
+  v: 'V跳数据（每行一份）',
+  sid: 'sid----uid 或 纯 sid',
+};
+/** 页签切换（旧 QTabWidget）。 */
+$('impTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  for (const b of document.querySelectorAll('.tab-btn')) b.classList.toggle('active', b === btn);
+  for (const p of document.querySelectorAll('.tabpane')) {
+    p.classList.toggle('active', p.dataset.pane === btn.dataset.tab);
+  }
+});
+
+/**
+ * 切换导入模式（旧 `on_import_mode_changed`）。
+ *
+ * 旧版只在「验证码登录」显示区号；文件选择按钮文案随模式在「选择文件 / 选择文件夹」间切换。
+ */
+function syncImportMode() {
+  const mode = document.querySelector('input[name=im]:checked')?.value ?? 'sms';
+  const isSms = mode === 'sms';
+  $('impAreaLabel').hidden = !isSms;
+  $('impAreaCode').hidden = !isSms;
+  $('impChooseFile').textContent = mode === 'bundle' ? '选择文件夹' : '选择文件';
+}
+
+document.querySelectorAll('input[name=im]').forEach((radio) => {
+  radio.addEventListener('change', syncImportMode);
+});
+
+$('importAccounts').addEventListener('click', async () => {
+  await loadImportConfig();
+  syncImportMode();
+  updateHeroExclusion();
+  updateProxyIpCount();
+  openDialog('dlgImport');
+});
+
+/**
+ * 把后端持久化的配置灌回界面（旧版从 `AccountImportDialog.__init__` 的参数读）。
+ *
+ * 旧版每次打开弹窗都传入当前内存状态；本版从 `import-config.json` 读，
+ * 保证刷新/重启后不丢。
+ */
+async function loadImportConfig() {
+  try {
+    const { config } = await api('/api/tabs/login/import-config');
+    if (!config) return;
+
+    state.imported = (config.accounts ?? []).map((a) => ({
+      value: `${a.phone}----${a.url}`,
+      phone: a.phone,
+      url: a.url,
+      status: a.statusText || '待导入',
+    }));
+    state.avatars = config.avatars ?? [];
+    state.nicknames = config.nicknames ?? [];
+    state.proxies = config.proxies ?? [];
+    state.bindAccounts = (config.bindAccounts ?? []).map((a) => ({
+      phone: a.phone,
+      url: a.url,
+      status: a.statusText || '待绑定',
+    }));
+    state.resetModels = config.resetDeviceBrandModels ?? [];
+
+    if (config.areaCode) $('impAreaCode').value = config.areaCode;
+    $('impFilePath').value = config.filePath ?? '';
+    $('impNicknamePath').value = config.nicknameFilePath ?? '';
+    $('impProxyPath').value = config.proxyFilePath ?? '';
+    $('impBindPath').value = config.bindAccountFilePath ?? '';
+    for (const radio of document.querySelectorAll('input[name=im]')) {
+      radio.checked = radio.value === (config.importMode ?? 'sms');
+    }
+    for (const radio of document.querySelectorAll('input[name=rsMode]')) {
+      radio.checked = radio.value === (config.resetDeviceMode ?? 'random');
+    }
+    $('impOverseas').checked = config.resetDeviceOverseasRandom !== false;
+    $('impProxyMachines').value = config.proxyMachine ?? 1;
+    $('impProxyIpCount').value = config.proxyIpCount ?? 1;
+    $('impFollowUsers').value = (config.followUserIds ?? []).join('\n');
+    $('impFollowCount').value = config.followCount ?? 1;
+    $('impHeroEnabled').checked = Boolean(config.heroSmsEnabled);
+    $('impHeroApiKey').value = config.heroSmsApiKey ?? '';
+    $('impHeroCountryCode').value = config.heroSmsCountryCode ?? '';
+
+    // 表格回填
+    renderImpTable('impAccountRows', state.imported, 'value');
+    renderImpTable('impAvatarRows', state.avatars, 'value');
+    renderImpTable('impNicknameRows', state.nicknames, 'value');
+    renderImpTable('impProxyRows', state.proxies, 'value');
+    renderResetTable();
+    $('impBindRows').innerHTML = state.bindAccounts.length
+      ? state.bindAccounts.map((a, i) => `<tr>
+          <td class="muted">${i + 1}</td><td class="mono">${a.phone}</td>
+          <td class="muted">${a.url || '—'}</td><td class="muted">${a.status}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="muted" style="padding:18px;text-align:center">未导入</td></tr>';
+
+    if (state.imported.length) $('impFileHint').textContent = `已导入 ${state.imported.length} 条`;
+    if (state.avatars.length) $('impAvatarHint').textContent = `已选择 ${state.avatars.length} 张`;
+    if (state.nicknames.length) $('impNicknameHint').textContent = `已选择 ${state.nicknames.length} 个`;
+    if (state.proxies.length) $('impProxyHint').textContent = `已选择 ${state.proxies.length} 条`;
+    if (state.bindAccounts.length) $('impBindHint').textContent = `已导入 ${state.bindAccounts.length} 条`;
+  } catch (error) {
+    // 读取失败不阻断（首次运行时文件不存在属正常）。
+    console.warn('loadImportConfig failed', error);
+  }
+}
+
+/**
+ * 收集界面状态为旧 `values()` 的 20 字段结构。
+ */
+function collectImportConfig() {
+  const accountFilePath = $('impFilePath').value.trim();
+  const accounts = state.imported.map((a, i) => ({
+    importIndex: i,
+    phone: a.phone ?? '',
+    url: a.url ?? '',
+    statusText: a.status ?? '',
+    assignedDeviceSerial: '',
+    sourceLineIndex: i,
+    sourceLineText: a.value ?? '',
+    filePath: accountFilePath,
+  }));
+  const bindAccounts = state.bindAccounts.map((a, i) => ({
+    importIndex: i,
+    phone: a.phone ?? '',
+    url: a.url ?? '',
+    statusText: a.status ?? '',
+    assignedDeviceSerial: '',
+    sourceLineIndex: i,
+    sourceLineText: `${a.phone}----${a.url}`,
+  }));
+  const followUserIds = $('impFollowUsers').value
+    .split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+
+  return {
+    importMode: document.querySelector('input[name=im]:checked')?.value ?? 'sms',
+    areaCode: $('impAreaCode').value.trim() || '+1',
+    filePath: $('impFilePath').value.trim(),
+    accounts,
+    avatars: state.avatars,
+    nicknames: state.nicknames,
+    nicknameFilePath: $('impNicknamePath').value.trim(),
+    proxies: state.proxies,
+    proxyFilePath: $('impProxyPath').value.trim(),
+    proxyMachine: Number($('impProxyMachines').value) || 1,
+    proxyIpCount: Number($('impProxyIpCount').value) || 1,
+    resetDeviceMode: document.querySelector('input[name=rsMode]:checked')?.value ?? 'random',
+    resetDeviceOverseasRandom: $('impOverseas').checked,
+    resetDeviceBrandModels: state.resetModels,
+    followUserIds,
+    followCount: Number($('impFollowCount').value) || 1,
+    bindAccounts,
+    bindAccountFilePath: $('impBindPath').value.trim(),
+    heroSmsEnabled: $('impHeroEnabled').checked,
+    heroSmsApiKey: $('impHeroApiKey').value.trim(),
+    heroSmsCountryId: Number($('impHeroCountry').value) || null,
+    heroSmsCountryCode: $('impHeroCountryCode').value.trim(),
+    heroSmsMaxPrice: state.heroMaxPrice ?? null,
+  };
+}
+
+/** 渲染通用 3 列表格（序号 / 值 / 状态）。 */
+function renderImpTable(tbodyId, items, valueKey) {
+  const body = $(tbodyId);
+  if (!items.length) {
+    body.innerHTML = `<tr><td colspan="3" class="muted" style="padding:18px;text-align:center">未导入</td></tr>`;
+    return;
+  }
+  body.innerHTML = items.map((item, i) => `<tr>
+    <td class="muted">${i + 1}</td>
+    <td class="mono">${accountInfo(item, valueKey)}</td>
+    <td class="muted">${item.status ?? ''}</td>
+  </tr>`).join('');
+}
+
+/**
+ * 账号信息列（旧 `ImportedAccountState.account_info`）。
+ *
+ * 无 phone 但有 url（备份包路径）→ 只显示文件名；否则 `phone--url`。
+ * 非账号类（头像/昵称/代理）只有 `value`，直接返回。
+ */
+function accountInfo(item, valueKey) {
+  if (!item.phone && item.url) {
+    return String(item.url).split(/[\\/]/).pop();
+  }
+  if (item.phone) return `${item.phone}--${item.url ?? ''}`;
+  return item[valueKey] ?? '';
+}
+
+/**
+ * 导入账号（旧 `select_account_file` 的解析阶段）。
+ *
+ * 旧版从文件读；浏览器侧没有文件系统权限，改为文本域输入后解析。
+ */
+$('impChooseFile').addEventListener('click', () => {
+  const mode = document.querySelector('input[name=im]:checked')?.value ?? 'sms';
+  const placeholders = {
+    sms: '+1-13800138000----https://example.com/code',
+    bundle: 'F:\\backup\\xhs_state.zip',
+    op: '49314148071----op-token',
+    v: '49314148072----v-token',
+    sid: '1792769561204765787689----6adb7e190000000005007801',
+  };
+  const text = prompt(`每行一条（${mode}）：`, placeholders[mode] ?? '');
+  if (!text) return;
+  // 旧 `parse_account_line`：可带 `成功--` / `失败--` 前缀，按 `----` 拆 phone/url/status。
+  state.imported = text
+    .split(/\r?\n/)
+    .map((line) => parseAccountLine(line))
+    .filter((a) => a !== null);
+  renderImpTable('impAccountRows', state.imported, 'value');
+  $('impFileHint').textContent = `已导入 ${state.imported.length} 条`;
+});
+
+$('impAvatarChoose').addEventListener('click', () => {
+  const text = prompt('头像文件夹内的图片路径（每行一个）：', '');
+  if (!text) return;
+  state.avatars = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+    .map((value) => ({ value, status: '待使用' }));
+  renderImpTable('impAvatarRows', state.avatars, 'value');
+  $('impAvatarHint').textContent = `已选择 ${state.avatars.length} 张`;
+});
+
+$('impNicknameChoose').addEventListener('click', () => {
+  const text = prompt('昵称（每行一个）：', '');
+  if (!text) return;
+  state.nicknames = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+    .map((value) => ({ value, status: '待使用' }));
+  renderImpTable('impNicknameRows', state.nicknames, 'value');
+  $('impNicknameHint').textContent = `已选择 ${state.nicknames.length} 个`;
+});
+
+$('impProxyChoose').addEventListener('click', () => {
+  const text = prompt('代理（每行一个，格式 ip:port:user:pass）：', '');
+  if (!text) return;
+  state.proxies = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+    .map((value) => ({ value, status: '待使用' }));
+  renderImpTable('impProxyRows', state.proxies, 'value');
+  $('impProxyHint').textContent = `已选择 ${state.proxies.length} 条`;
+});
+
+$('impBindChoose').addEventListener('click', () => {
+  const text = prompt('手机号----验证码URL（每行一条）：', '');
+  if (!text) return;
+  state.bindAccounts = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+    .map((value) => {
+      const [phone, url] = value.split('----');
+      return { phone: phone ?? value, url: url ?? '', status: '待绑定' };
+    });
+  $('impBindRows').innerHTML = state.bindAccounts.map((a, i) => `<tr>
+    <td class="muted">${i + 1}</td><td class="mono">${a.phone}</td>
+    <td class="muted">${a.url || '—'}</td><td class="muted">${a.status}</td></tr>`).join('');
+  $('impBindHint').textContent = `已导入 ${state.bindAccounts.length} 条`;
+});
+
+/**
+ * 新机配置（旧 `_load_reset_device_models` / `_on_brand_changed` / `_on_reset_model_checked`）。
+ *
+ * 旧版逻辑：品牌下拉由机型库填充 → 选品牌自动加载型号（多选）→
+ * 勾选型号自动加入下方表格，取消勾选自动移除。
+ */
+$('impLoadModels').addEventListener('click', async () => {
+  try {
+    const { brands, total } = await api('/api/devices/models');
+    if (!brands?.length) {
+      alert('机型库为空：检查 resources/tools/devices.json 是否存在');
+      return;
+    }
+    $('impBrand').innerHTML = brands.map((b) => `<option value="${b}">${b}</option>`).join('');
+    state.logs.push(`[${new Date().toLocaleTimeString()}] 机型库已加载：${brands.length} 品牌 / ${total} 机型`);
+    await loadModelsForBrand(brands[0]);
+  } catch (error) { alert(error.message); }
+});
+
+async function loadModelsForBrand(brand) {
+  if (!brand) return;
+  const { models } = await api(`/api/devices/models?brand=${encodeURIComponent(brand)}`);
+  const selected = new Set(
+    state.resetModels.filter((m) => m.brand === brand).map((m) => m.model),
+  );
+  $('impModelList').innerHTML = models.map((m) => `
+    <label><input type="checkbox" data-model="${m}" ${selected.has(m) ? 'checked' : ''} /> ${m}</label>
+  `).join('') || '<div class="muted">该品牌无型号</div>';
+}
+
+$('impBrand').addEventListener('change', (e) => loadModelsForBrand(e.target.value));
+
+$('impModelList').addEventListener('change', (e) => {
+  const model = e.target.dataset?.model;
+  if (!model) return;
+  const brand = $('impBrand').value;
+  if (e.target.checked) {
+    if (!state.resetModels.some((m) => m.brand === brand && m.model === model)) {
+      state.resetModels.push({ brand, model });
+    }
+  } else {
+    state.resetModels = state.resetModels.filter((m) => !(m.brand === brand && m.model === model));
+  }
+  renderResetTable();
+});
+
+function renderResetTable() {
+  const body = $('impResetRows');
+  if (!state.resetModels.length) {
+    body.innerHTML = '<tr><td colspan="4" class="muted" style="padding:18px;text-align:center">未配置</td></tr>';
+    return;
+  }
+  body.innerHTML = state.resetModels.map((m, i) => `<tr>
+    <td class="muted">${i + 1}</td>
+    <td>${m.brand}</td>
+    <td class="mono">${m.model}</td>
+    <td><button data-del-model="${i}">删除</button></td>
+  </tr>`).join('');
+}
+
+$('impResetRows').addEventListener('click', (e) => {
+  const idx = e.target.dataset?.delModel;
+  if (idx === undefined) return;
+  const removed = state.resetModels.splice(Number(idx), 1)[0];
+  renderResetTable();
+  const box = document.querySelector(`#impModelList input[data-model="${CSS.escape(removed.model)}"]`);
+  if (box) box.checked = false;
+});
+
+// 旧 `_on_reset_mode_changed`：只有「指定机型」显示品牌面板
+document.querySelectorAll('input[name=rsMode]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    const mode = document.querySelector('input[name=rsMode]:checked')?.value;
+    $('impSpecifiedPanel').hidden = mode !== 'specified';
+  });
+});
+
+/** HeroSMS 页签（旧 `_fetch_herosms_*` 四个动作）。 */
+function heroKey() {
+  const key = $('impHeroApiKey').value.trim();
+  if (!key) {
+    alert('请先填写 HeroSMS API Key');
+    return '';
+  }
+  return key;
+}
+
+async function heroPost(path, extra = {}) {
+  const apiKey = heroKey();
+  if (!apiKey) return null;
+  try {
+    return await api('/api/herosms/' + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ apiKey, ...extra }),
+    });
+  } catch (error) {
+    alert(error.message);
+    return null;
+  }
+}
+
+$('impHeroFetchCountries').addEventListener('click', async () => {
+  const result = await heroPost('countries');
+  if (!result) return;
+  state.heroCountries = result.countries ?? [];
+  renderHeroCountries();
+  $('impHeroCountryLabel').textContent = `国家：已获取 ${state.heroCountries.length} 个`;
+});
+
+/** 旧 `_filter_herosms_countries`：按名称 / ID / 区号筛选。 */
+/**
+ * 渲染国家下拉（旧 `_filter_herosms_countries`）。
+ *
+ * HeroSMS 返回三语言名（rus/eng/chn），没有 dialCode；
+ * 展示优先中文，过滤时三种语言都参与。
+ */
+function countryLabel(c) {
+  return c.chn || c.eng || c.rus || String(c.countryId);
+}
+
+function renderHeroCountries() {
+  const query = $('impHeroCountrySearch').value.trim().toLowerCase();
+  const list = query
+    ? state.heroCountries.filter((c) =>
+        String(c.countryId).includes(query) ||
+        (c.chn ?? '').toLowerCase().includes(query) ||
+        (c.eng ?? '').toLowerCase().includes(query) ||
+        (c.rus ?? '').toLowerCase().includes(query))
+    : state.heroCountries;
+  $('impHeroCountry').innerHTML = list.length
+    ? list.map((c) => `<option value="${c.countryId}">${countryLabel(c)} (${c.countryId})</option>`).join('')
+    : '<option value="">（无匹配）</option>';
+}
+
+$('impHeroCountrySearch').addEventListener('input', renderHeroCountries);
+
+$('impHeroCountry').addEventListener('change', () => {
+  const id = $('impHeroCountry').value;
+  const found = state.heroCountries.find((c) => String(c.countryId) === id);
+  $('impHeroCountryLabel').textContent = found
+    ? `国家：${countryLabel(found)} (${found.countryId})`
+    : '国家：未查询';
+});
+
+$('impHeroFetchPrices').addEventListener('click', async () => {
+  const countryId = Number($('impHeroCountry').value);
+  if (!Number.isInteger(countryId) || countryId < 0) {
+    alert('请先获取并选择有效国家');
+    return;
+  }
+  const result = await heroPost('prices', { countryId, service: 'qf' });
+  if (!result) return;
+  const prices = result.prices ?? [];
+  const body = $('impHeroPriceRows');
+  if (!prices.length) {
+    body.innerHTML = '<tr><td colspan="3" class="muted" style="padding:14px;text-align:center">无报价</td></tr>';
+    return;
+  }
+  // 旧 `_on_herosms_price_changed`：行可选中，选中即确定 max_price。
+  body.innerHTML = prices.map((p, i) => `<tr data-price-idx="${i}" style="cursor:pointer">
+    <td class="mono">${p.price}</td><td>${p.count}</td><td>${p.physicalCount}</td>
+  </tr>`).join('');
+  state.heroPrices = prices;
+  state.heroMaxPrice = null;
+  $('impHeroPriceLabel').textContent = `项目：qf · ${prices.length} 档（点击一行选定最高价）`;
+});
+
+$('impHeroPriceRows').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-price-idx]');
+  if (!tr) return;
+  const idx = Number(tr.dataset.priceIdx);
+  const picked = state.heroPrices?.[idx];
+  if (!picked) return;
+  for (const row of document.querySelectorAll('#impHeroPriceRows tr')) {
+    row.style.background = '';
+  }
+  tr.style.background = '#dbeafe';
+  state.heroMaxPrice = picked.price;
+  // 旧版文案：项目 / 国家 / 价格 / 库存 / 实体
+  const country = state.heroCountries.find((c) => String(c.countryId) === $('impHeroCountry').value);
+  $('impHeroPriceLabel').textContent =
+    `项目：qf | 国家：${country?.chn ?? '未知'} | 价格 ${picked.price} | ` +
+    `库存 ${picked.count} | 实体 ${picked.physicalCount}`;
+});
+
+$('impHeroFetchBalance').addEventListener('click', async () => {
+  const result = await heroPost('balance');
+  if (!result) return;
+  $('impHeroBalance').textContent = `余额：${result.balance}`;
+});
+
+$('impHeroFetchActive').addEventListener('click', async () => {
+  const result = await heroPost('activations');
+  if (!result) return;
+  const rows = result.activations ?? [];
+  const body = $('impHeroActiveRows');
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="11" class="muted" style="padding:14px;text-align:center">无活动号码</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map((a) => `<tr>
+    <td class="mono">${a.activationId}</td><td>${a.service}</td><td>${a.country}</td>
+    <td class="mono">${a.phone}</td><td>${a.cost}</td><td>${a.status}</td>
+    <td class="mono">${a.code || '—'}</td><td class="muted">${(a.smsText || '—').slice(0, 30)}</td>
+    <td class="muted">${a.createdAt || '—'}</td><td>${a.canResend ? '是' : '否'}</td>
+    <td><button data-cancel-act="${a.activationId}">取消</button></td>
+  </tr>`).join('');
+});
+
+/**
+ * 取消购买活动号码（旧 `_confirm_cancel_herosms_activation`）。
+ *
+ * 旧版：弹确认框（「确认取消活动号码 {id} 的购买吗？」）→ 确认后 setStatus 6。
+ */
+$('impHeroActiveRows').addEventListener('click', async (e) => {
+  const id = e.target.dataset?.cancelAct;
+  if (!id) return;
+  if (!confirm(`确认取消活动号码 ${id} 的购买吗？`)) return;
+  const result = await heroPost('cancel', { activationId: id });
+  if (!result) return;
+  state.logs.push(`[${new Date().toLocaleTimeString()}] 已取消活动号码 ${id}`);
+  // 取消成功后刷新列表（旧版同样重拉）
+  document.getElementById('impHeroFetchActive').click();
+});
+
+/** HeroSMS 启用开关与其他导入控件互斥（旧 `_update_herosms_account_exclusion`）。 */
+function updateHeroExclusion() {
+  const enabled = $('impHeroEnabled').checked;
+  const hasAccounts = state.imported.length > 0;
+  const box = $('impHeroEnabled');
+
+  if (hasAccounts) {
+    // 已有导入账号时：禁止勾选 HeroSMS。
+    if (enabled) {
+      box.checked = false;
+    }
+    box.disabled = true;
+    box.parentElement.title = '已有导入账号，请先清除已导入账号';
+  } else {
+    box.disabled = false;
+    box.parentElement.title = '启用后不可导入账号 TXT';
+  }
+
+  const on = box.checked;
+  // 启用 HeroSMS 时：文件选择、区号、五个登录模式单选全部禁用。
+  $('impChooseFile').disabled = on;
+  $('impAreaCode').disabled = on;
+  for (const radio of document.querySelectorAll('input[name=im]')) radio.disabled = on;
+  $('impHeroClear').disabled = !hasAccounts;
+}
+
+$('impHeroEnabled').addEventListener('change', updateHeroExclusion);
+
+/** 代理池：设备数 ÷ 每 IP 机数 = 需要的 IP 条数（旧 `math.ceil`）。 */
+function updateProxyIpCount() {
+  const machines = Number($('impProxyMachines').value) || 1;
+  const slots = state.selected.size || state.rows.length;
+  const needed = Math.max(1, Math.ceil(slots / Math.max(1, machines)));
+  $('impProxyIpCount').value = needed;
+  $('impProxyIpCount').title = `${slots} 个设备/容器 ÷ ${machines} 机/IP = ${needed} 条`;
+}
+
+$('impProxyMachines').addEventListener('input', updateProxyIpCount);
+
+$('impHeroClear').addEventListener('click', () => {
+  if (!state.imported.length) return;
+  // 旧 `_clear_herosms_imported_accounts`：弹确认框（说明不动磁盘原文件）。
+  if (!confirm('确定清除当前已导入账号吗？\n\n只清除程序当前加载的账号列表和文件路径，不会删除磁盘上的原始 TXT 文件。')) {
+    return;
+  }
+  state.imported = [];
+  renderImpTable('impAccountRows', [], 'value');
+  $('impFileHint').textContent = '未选择文件';
+  updateHeroExclusion();
+});
+
+/**
+ * 解析一行账号（旧 `parse_account_line`）。
+ *
+ * 支持 `成功--` / `失败--` 前缀；按 `----` 分割为 phone / url / status。
+ * 不足两段或 phone/url 为空返回 null。
+ */
+function parseAccountLine(line) {
+  let normalized = String(line ?? '').trim();
+  if (!normalized) return null;
+
+  let status = '';
+  for (const prefix of ['成功--', '失败--']) {
+    if (normalized.startsWith(prefix)) {
+      status = prefix.slice(0, -2);
+      normalized = normalized.slice(prefix.length).trim();
+      break;
+    }
+  }
+
+  const parts = normalized.split('----');
+  if (parts.length < 2) return null;
+  const phone = parts[0].replace(/\s+/g, '');
+  const url = parts[1].trim();
+  if (!status && parts.length >= 3) status = parts.slice(2).join('----').trim();
+  if (!phone || !url) return null;
+
+  return { value: `${phone}----${url}`, phone, url, status: status || '待导入' };
+}
+
+/**
+ * 导出失败账号（旧 `export_failed_accounts`）。
+ *
+ * 筛选条件：`status === '失败'` 且 phone 与 url 都非空，输出 `phone----url`。
+ */
+$('impExportFailed').addEventListener('click', () => {
+  const failed = state.imported.filter(
+    (a) => String(a.status ?? '').trim() === '失败' && a.phone && a.url,
+  );
+  if (!failed.length) {
+    alert('当前没有可导出的失败账号');
+    return;
+  }
+  const lines = failed.map((a) => `${a.phone}----${a.url}`);
+  downloadText('failed_accounts.txt', lines.join('\n') + '\n');
+  alert(`已导出 ${lines.length} 条失败账号`);
+});
+
+/**
+ * 导出未成功的绑定账号（旧 `export_bind_accounts`）。
+ *
+ * 筛选条件：`status !== '成功'`，输出 `phone----url`。
+ */
+$('impBindExport').addEventListener('click', () => {
+  const rest = state.bindAccounts.filter((a) => String(a.status ?? '').trim() !== '成功');
+  if (!rest.length) {
+    alert('所有账号均已成功，无需导出');
+    return;
+  }
+  const lines = rest.map((a) => `${a.phone}----${a.url}`);
+  downloadText('bind_not_succeeded.txt', lines.join('\n') + '\n');
+  alert(`已导出 ${lines.length} 条账号`);
+});
+
+/**
+ * 触发浏览器下载（等价旧 `QFileDialog.getSaveFileName` + `Path.write_text`）。
+ *
+ * 浏览器无法指定目录，交给下载管理器处理。
+ */
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+$('impSave').addEventListener('click', async () => {
+  try {
+    const config = collectImportConfig();
+    await api('/api/tabs/login/import-config', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ config }),
+    });
+    closeDialog('dlgImport');
+    // 旧版保存后打一条统计日志（账号/头像/昵称/代理/模式/区号）。
+    const modeName = { sms: '验证码登录', bundle: '备份包登录', op: 'QQ OP登录', v: 'V跳登录', sid: 'SID登录' }[config.importMode] ?? config.importMode;
+    state.logs.push(
+      `[${new Date().toLocaleTimeString()}] 账号导入配置已更新，当前 ${config.accounts.length} 条，` +
+      `头像 ${config.avatars.length} 张，昵称 ${config.nicknames.length} 条，代理 ${config.proxies.length} 条，` +
+      `模式 ${modeName}，区号 ${config.areaCode}`,
+    );
+  } catch (error) {
+    alert(`保存失败：${error.message}`);
+  }
+});
+
+$('singleTask').addEventListener('click', async () => {
+  const tasks = await api('/api/tabs/login/tasks');
+  state.actions = tasks.actions ?? [];
+  // 重置表单到第一步（只选动作）。
+  $('singleForm').hidden = true;
+  $('singleForm').innerHTML = '';
+  $('singleFormConfirm').hidden = true;
+  $('singleConfirm').hidden = false;
+  $('singleList').innerHTML = tasks.singles.map((t, i) =>
+    `<label><input type="radio" name="st" value="${t.id}" ${i === 0 ? 'checked' : ''} /> ${t.label}</label>`).join('');
+  openDialog('dlgSingle');
+});
+/**
+ * 通用动作表单渲染。
+ *
+ * 旧实现是 12 个 if/else 分支、每支 3~6 次 `prompt()`；参数定义现在由
+ * 业务包（`ActionDefinition.params`）声明，这里只负责按 `type` 渲染。
+ */
+// 挂到 window：便于其它面板/测试复用，也避免模块作用域导致的不可测。
+window.renderActionForm = function renderActionForm(params, container) {
+  container.innerHTML = '';
+  for (const p of params) {
+    const row = document.createElement('label');
+    row.className = 'form-row';
+    const caption = document.createElement('span');
+    caption.textContent = p.label + (p.required ? ' *' : '');
+    row.appendChild(caption);
+
+    let input;
+    if (p.type === 'textarea') {
+      input = document.createElement('textarea');
+      input.rows = 3;
+    } else if (p.type === 'select') {
+      input = document.createElement('select');
+      for (const o of p.options ?? []) {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label;
+        input.appendChild(opt);
+      }
+    } else if (p.type === 'confirm') {
+      input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = p.defaultValue !== 'false';
+    } else {
+      input = document.createElement('input');
+      input.type = p.type === 'password' ? 'password' : p.type === 'number' ? 'number' : 'text';
+    }
+
+    if (p.defaultValue !== undefined && p.type !== 'confirm') input.value = p.defaultValue;
+    input.dataset.param = p.name;
+    input.dataset.paramType = p.type;
+    row.appendChild(input);
+
+    if (p.hint) {
+      const hint = document.createElement('small');
+      hint.textContent = p.hint;
+      row.appendChild(hint);
+    }
+    container.appendChild(row);
+  }
+};
+
+/** 从表单读出参数；必填为空时返回 null 并提示。 */
+window.collectActionParams = function collectActionParams(params, container) {
+  const out = {};
+  for (const p of params) {
+    const el = container.querySelector(`[data-param="${p.name}"]`);
+    if (!el) continue;
+    const value = p.type === 'confirm' ? (el.checked ? 'true' : 'false') : el.value.trim();
+    if (p.required && !value) {
+      alert(`「${p.label}」不能为空`);
+      el.focus();
+      return null;
+    }
+    if (value !== '' || p.type === 'confirm') out[p.name] = value;
+  }
+  return out;
+};
+
+$('singleConfirm').addEventListener('click', async () => {
+  const picked = document.querySelector('input[name=st]:checked')?.value;
+  const actions = state.actions ?? [];
+  const def = actions.find((a) => a.id === picked);
+  const { runnable, busy } = runnableSelection();
+  const rows = runnable;
+  if (!rows.length) {
+    alert(busy.length ? '选中的设备都在执行任务，请等待或取消后再试' : '请先选择设备');
+    return;
+  }
+  if (busy.length && !confirm(`跳过 ${busy.length} 台执行中的设备，继续？`)) return;
+  if (!def) {
+    closeDialog('dlgSingle');
+    alert(`「${picked}」尚未注册：该动作未出现在任何业务包中`);
+    return;
+  }
+
+  const form = $('singleForm');
+  if (def.params && def.params.length) {
+    renderActionForm(def.params, form);
+    form.hidden = false;
+    $('singleFormConfirm').hidden = false;
+    $('singleConfirm').hidden = true;
+    return;
+  }
+  await submitSingle(def.id, rows, {});
+});
+
+/** 提交单项任务。 */
+async function submitSingle(actionId, rows, taskParams) {
+  closeDialog('dlgSingle');
+  try {
+    const result = await api('/api/tabs/login/batch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: actionId,
+        rows: rows.map((r) => ({ deviceId: r.deviceId, serial: r.serial })),
+        taskParams,
+      }),
+    });
+    const bad = result.accepted.filter((item) => item.error);
+    state.logs.push(`[${new Date().toLocaleTimeString()}] ${actionId}: ${result.accepted.length} 台`);
+    if (bad.length) alert(`未提交：\n${bad.map((f) => f.serial + ' ' + f.error).join('\n')}`);
+    await load();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+$('singleFormConfirm').addEventListener('click', async () => {
+  const picked = document.querySelector('input[name=st]:checked')?.value;
+  const def = (state.actions ?? []).find((a) => a.id === picked);
+  if (!def) return;
+  const taskParams = collectActionParams(def.params ?? [], $('singleForm'));
+  if (!taskParams) return;
+  const { runnable } = runnableSelection();
+  await submitSingle(def.id, runnable, taskParams);
+});
+
+// 旧 `expandAll` / `collapseAll`
+$('expandAll').addEventListener('click', () => { state.collapsed.clear(); render(); });
+$('collapseAll').addEventListener('click', () => {
+  for (const row of state.rows) state.collapsed.add(row.hostIp || '(未知宿主)');
+  render();
+});
+
+// 旧 `show_device_table_context_menu`：右键全选/取消全选
+$('rows').addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const ip = e.target.closest('tr')?.querySelector('[data-group]')?.dataset.ip;
+  const targets = ip
+    ? state.rows.filter((r) => (r.hostIp || '(未知宿主)') === ip)
+    : state.rows;
+  if (!targets.length) return;
+  const allSelected = targets.every((r) => state.selected.has(r.deviceId));
+  if (allSelected) for (const r of targets) state.selected.delete(r.deviceId);
+  else for (const r of targets) state.selected.add(r.deviceId);
+  render();
+});
+
+// 旧折叠三角（expanded_keys）
+$('rows').addEventListener('click', (e) => {
+  const ip = e.target.dataset?.toggle;
+  if (!ip) return;
+  if (state.collapsed.has(ip)) state.collapsed.delete(ip);
+  else state.collapsed.add(ip);
+  render();
+});
+
+$('multi').addEventListener('change', () => render());
+
+$('sidExtractBtn').addEventListener('click', async () => {
+  const rows = selection();
+  if (!rows.length) { alert('请先选择设备'); return; }
+  closeDialog('dlgSid');
+  try {
+    const result = await api('/api/tabs/login/batch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'sid-extract',
+        rows: rows.map((r) => ({ deviceId: r.deviceId, serial: r.serial })),
+      }),
+    });
+    state.logs.push(`[${new Date().toLocaleTimeString()}] 提取 SID: ${result.accepted.length} 台`);
+    await load();
+    alert('已提交提取任务，完成后在「查看日志」里看 sid。');
+  } catch (error) { alert(error.message); }
+});
+
+$('sidConfirm').addEventListener('click', async () => {
+  const { runnable, busy } = runnableSelection();
+  const rows = runnable;
+  if (!rows.length) {
+    alert(busy.length ? '选中的设备都在执行任务，请等待或取消后再试' : '请先选择设备');
+    return;
+  }
+  if (busy.length && !confirm(`跳过 ${busy.length} 台执行中的设备：\n${busy.map((r) => r.serial || r.deviceId).join('\n')}\n\n继续？`)) return;
+  // 每行 `sid,userid`；也容忍空格/制表符分隔与全角逗号。
+  const entries = $('sidInput').value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split(/[,，\t ]+/).filter(Boolean))
+    .filter((parts) => parts.length >= 2)
+    .map((parts) => ({ sid: parts[0], userid: parts[1] }));
+  if (!entries.length) { alert('请至少输入一条 sid,userid'); return; }
+  if (entries.length > rows.length) {
+    alert(`输入 ${entries.length} 条，但只选了 ${rows.length} 台设备`);
+    return;
+  }
+
+  closeDialog('dlgSid');
+  // batch 接口一次只接受一组 taskParams，因此按设备逐条提交。
+  const failures = [];
+  for (let i = 0; i < entries.length; i += 1) {
+    const row = rows[i];
+    const entry = entries[i];
+    try {
+      const result = await api('/api/tabs/login/batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sid-login',
+          rows: [{ deviceId: row.deviceId, serial: row.serial }],
+          taskParams: entry,
+        }),
+      });
+      const bad = (result.accepted ?? []).filter((item) => item.error);
+      if (bad.length) failures.push(`${row.serial}: ${bad[0].error}`);
+      state.logs.push(`[${new Date().toLocaleTimeString()}] SID 上号 ${row.serial}`);
+    } catch (error) {
+      failures.push(`${row.serial}: ${error.message}`);
+    }
+  }
+  await load();
+  if (failures.length) alert(`未提交：\n${failures.join('\n')}`);
+});
+
+$('restoreConfirm').addEventListener('click', async () => {
+  const { runnable, busy } = runnableSelection();
+  const rows = runnable;
+  if (!rows.length) {
+    alert(busy.length ? '选中的设备都在执行任务，请等待或取消后再试' : '请先选择设备');
+    return;
+  }
+  if (busy.length && !confirm(`跳过 ${busy.length} 台执行中的设备：\n${busy.map((r) => r.serial || r.deviceId).join('\n')}\n\n继续？`)) return;
+  const bundleDir = $('restoreDir').value.trim();
+  if (!bundleDir) { alert('请填写备份包目录'); return; }
+  const mode = document.querySelector('input[name=rmode]:checked')?.value ?? 'core';
+  const launch = $('restoreLaunch').checked ? 'true' : 'false';
+
+  closeDialog('dlgRestore');
+  try {
+    const result = await api('/api/tabs/login/batch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'restore-state',
+        rows: rows.map((r) => ({ deviceId: r.deviceId, serial: r.serial })),
+        taskParams: { source: bundleDir, mode, launch },
+      }),
+    });
+    const bad = (result.accepted ?? []).filter((item) => item.error);
+    state.logs.push(`[${new Date().toLocaleTimeString()}] 恢复备份包: ${result.accepted.length} 台`);
+    if (bad.length) alert(`未提交：\n${bad.map((f) => f.serial + ' ' + f.error).join('\n')}`);
+    await load();
+  } catch (error) { alert(error.message); }
+});
+
+/**
+ * 旧 `LoginModeDialog`：两个按钮直接决定模式，字段值随模式提交。
+ *
+ * `login_and_backup` 勾选时循环次数生效（旧版同样只在批量模式生效）。
+ */
+async function confirmLogin(mode) {
+  const rows = selection();
+  if (!rows.length) { alert('请先选择设备'); closeDialog('dlgLogin'); return; }
+  const settings = {
+    sameIpBatchSize: Number($('lmBatch').value) || 3,
+    batchIntervalSeconds: Number($('lmInterval').value) || 10,
+    loginLoopCount: Number($('lmLoop').value) || 1,
+  };
+  closeDialog('dlgLogin');
+
+  if (mode === 'manual') {
+    const phone = prompt('手动设置登录：请输入手机号');
+    if (!phone) return;
+    const codeUrl = prompt('验证码网页 URL（可留空）') ?? '';
+    await startLogin(rows, phone, codeUrl, settings);
+    return;
+  }
+  // 批量模式：优先用该行已配置的登录源里的手机号。
+  const first = rows[0];
+  const preset = first.source?.kind === 'sms' ? first.source.value : '';
+  const phone = prompt(
+    `批量导入登录：为 ${first.serial || first.deviceId} 输入手机号` +
+      (preset ? `（当前登录源：${preset}）` : ''),
+    preset.replace(/^\+\d+-/, '').split('----')[0] || '',
+  );
+  if (!phone) return;
+  const codeUrl = prompt('验证码网页 URL（可留空）') ?? '';
+  await startLogin([first], phone, codeUrl, settings);
+}
+
+$('lmBatchBtn').addEventListener('click', () => confirmLogin('batch'));
+$('lmManualBtn').addEventListener('click', () => confirmLogin('manual'));
+
+/**
+ * 提交登录（旧 `run_batch_action(LOGIN)` + 链式后置动作）。
+ *
+ * 走 `/batch-login`：登录成功后由内核按配置自动串接
+ * 绑定手机号 → 仅关注可评论 → 改资料 → 关注 → 备份 → 清除 → 下一循环。
+ */
+async function startLogin(rows, phone, codeUrl, settings = {}) {
+  if (!/^\d{6,15}$/.test(phone)) { alert('手机号格式不正确'); return; }
+  const withSerial = rows.filter((r) => r.serial);
+  if (!withSerial.length) { alert('选中设备均未运行，缺少 ADB 端口'); return; }
+  try {
+    const result = await api('/api/tabs/login/batch-login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        rows: withSerial.map((r) => ({ deviceId: r.deviceId, serial: r.serial })),
+        login: { phone, countryCode: '+86', codeUrl: codeUrl.trim() },
+        options: {
+          // 旧 `batch_settings()`：同 IP 批量 / 间隔 / 循环次数。
+          sameIpBatchSize: settings.sameIpBatchSize ?? 3,
+          batchIntervalSeconds: settings.batchIntervalSeconds ?? 10,
+          loginLoopCount: settings.loginLoopCount ?? 1,
+          loginRetryCount: Number($('lmRetry')?.value ?? 0) || 0,
+          // 工具栏勾选框。
+          loginAndBackup: $('loginAndBackup').checked,
+          clearData: $('clearData').checked,
+          // 登录设置里的附加项（旧 `LoginSettingsDialog` 的复选框）。
+          setAvatarNickname: state.imported.length > 0 && $('lmAvatar')?.checked === true,
+          onlyFollowingComments: $('lmFollow')?.checked === true,
+          enableBindPhone: $('lmBind')?.checked === true,
+          followUsers: false,
+          setProxyBeforeLogin: $('lmProxy')?.checked === true,
+          // 代理池：旧 `imported_proxies` + `proxy_machine_count`。
+          proxies: state.proxies.map((p) => p.value),
+          proxyMachinesPerIp: Number($('impProxyMachines').value) || 1,
+          resetDeviceBeforeLogin: $('lmReset')?.checked === true,
+          setAdbIme: $('lmIme')?.checked !== false,
+          avatarsAvailable: state.avatars.length,
+          nicknamesAvailable: state.nicknames.length,
+          // HeroSMS：旧 `_herosms_job_snapshot()` 的四个字段。
+          smsProvider: $('impHeroEnabled').checked ? 'herosms' : 'legacy',
+          heroSms: $('impHeroEnabled').checked
+            ? {
+                apiKey: $('impHeroApiKey').value.trim(),
+                countryId: Number($('impHeroCountry').value) || 0,
+                // 旧 `herosms_country_code` 是用户手填（国家列表本身没有区号字段）。
+                countryCode: $('impHeroCountryCode').value.trim() || '+86',
+                maxPrice: Number(state.heroMaxPrice ?? 0) || 0,
+              }
+            : undefined,
+        },
+      }),
+    });
+    state.logs.push(`[${new Date().toLocaleTimeString()}] 登录提交：${result.accepted.length} 台`);
+    const bad = result.accepted.filter((item) => item.error);
+    if (bad.length) alert(`未提交：\n${bad.map((f) => f.serial + ' ' + f.error).join('\n')}`);
+  } catch (error) {
+    alert(error.message);
+  }
+  await load();
+}
+
+await loadHosts();
+await load();
+state.timer = setInterval(() => { if ($('autoRefresh').checked) load(); }, 5000);
+</script>
+</body>
+</html>

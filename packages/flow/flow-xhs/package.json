@@ -1,0 +1,22 @@
+{
+  "name": "@myt/flow-xhs",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pack": "./src/pack.ts"
+  },
+  "dependencies": {
+    "@myt/device": "workspace:*",
+    "@myt/flow": "workspace:*",
+    "@myt/locator": "workspace:*",
+    "@myt/runs": "workspace:*",
+    "@myt/human": "workspace:*",
+    "tar": "^7.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5"
+  }
+}

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MYT · 设备农场</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --border: #e5e7eb;
+    --text: #111827;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --green: #16a34a;
+    --gray: #9ca3af;
+    --amber: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 20px; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .spacer { flex: 1; }
+  select, input, button {
+    font: inherit; color: inherit;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px; background: var(--surface);
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main { padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .card .label { color: var(--muted); font-size: 12px; }
+  .card .value { font-size: 22px; font-weight: 600; margin-top: 4px; word-break: break-word; }
+  .card .value.small { font-size: 13px; line-height: 1.35; font-weight: 500; }
+  .card .value small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    border: 1px solid var(--border); background: var(--surface);
+    border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted);
+  }
+  .tab.active { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+  .table-wrap { max-height: calc(100vh - 250px); overflow: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; background: #fafafa; position: sticky; top: 0; z-index: 1; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafbff; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .running { color: var(--green); } .running .dot { background: var(--green); }
+  .created { color: var(--amber); } .created .dot { background: var(--amber); }
+  .exited { color: var(--gray); } .exited .dot { background: var(--gray); }
+  .unknown { color: var(--muted); } .unknown .dot { background: var(--gray); }
+  .mono { font-family: ui-monospace, Consolas, monospace; color: var(--muted); }
+  .empty, .error { padding: 40px; text-align: center; color: var(--muted); }
+  .error { color: #b91c1c; }
+  .status-text { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+  .actions { display: flex; gap: 6px; }
+  .mini { padding: 2px 10px; border-radius: 6px; font-size: 12px; }
+  .mini:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>MYT · 设备农场</h1>
+  <a href="/login"><button>上号器</button></a>
+  <select id="hostSelect" aria-label="宿主"></select>
+  <button id="refresh">刷新</button>
+  <div class="spacer"></div>
+  <span class="badge" id="health"><span class="dot" style="background:var(--gray)"></span><span>连接中</span></span>
+</header>
+
+<main>
+  <section class="cards" id="cards"></section>
+  <div class="toolbar">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-state="all">全部</button>
+      <button class="tab" data-state="running">运行中</button>
+      <button class="tab" data-state="created">已创建</button>
+      <button class="tab" data-state="exited">已停止</button>
+    </div>
+    <input id="search" placeholder="搜索容器名 / 镜像" style="width:260px" />
+    <div class="spacer"></div>
+    <button id="probe" class="primary" title="对当前运行中的容器抓一次 UI 并跑探测流程">跑探测流程</button>
+    <button id="login" title="对运行中的容器执行手机号登录（填号 + 发码）">手机号登录</button>
+    <span class="status-text" id="count"></span>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28%">容器</th>
+        <th style="width:8%">坑位</th>
+        <th style="width:12%">状态</th>
+        <th style="width:10%">ADB 端口</th>
+        <th style="width:26%">镜像</th>
+        <th>Docker 状态</th>
+        <th style="width:12%">操作</th>
+      </tr>
+    </thead>
+    <tbody id="rows"><tr><td colspan="6" class="empty">加载中…</td></tr></tbody>
+  </table>
+  </div>
+</main>
+
+<script type="module">
+const state = { hosts: [], current: null, containers: [], filter: 'all', keyword: '' };
+const $ = (id) => document.getElementById(id);
+
+async function api(path) {
+  const res = await fetch(path, { cache: 'no-store' });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  return res.json();
+}
+
+function renderHosts() {
+  const select = $('hostSelect');
+  select.innerHTML = state.hosts.map((h) =>
+    `<option value="${h.ip}">${h.ip}${h.online ? '' : ' · 离线'}</option>`
+  ).join('');
+  select.value = state.current ?? state.hosts[0]?.ip ?? '';
+}
+
+function renderCards() {
+  const host = state.hosts.find((h) => h.ip === state.current) ?? {};
+  const cards = [
+    ['容器总数', host.containerCount ?? '—'],
+    ['运行中', host.runningCount ?? '—'],
+    ['坑位数', host.slotCount ?? '—'],
+    ['内存占用', host.memPercent != null ? `${host.memPercent}%` : '—'],
+    ['磁盘占用', host.diskPercent != null ? `${host.diskPercent}%` : '—'],
+    ['宿主版本', host.version ?? '—'],
+  ];
+  $('cards').innerHTML = cards.map(([label, value]) => {
+    const text = String(value);
+    const cls = text.length > 10 ? 'value small' : 'value';
+    return `<div class="card"><div class="label">${label}</div><div class="${cls}">${text}</div></div>`;
+  }).join('');
+}
+
+function renderRows() {
+  const list = state.containers.filter((c) => {
+    if (state.filter !== 'all' && c.state !== state.filter) return false;
+    if (!state.keyword) return true;
+    const kw = state.keyword.toLowerCase();
+    return c.name.toLowerCase().includes(kw) || c.image.toLowerCase().includes(kw);
+  });
+  $('count').textContent = `${list.length} / ${state.containers.length} 条`;
+  if (!list.length) {
+    $('rows').innerHTML = `<tr><td colspan="6" class="empty">没有匹配的容器</td></tr>`;
+    return;
+  }
+  $('rows').innerHTML = list.map((c) => `
+    <tr>
+      <td class="mono" title="${c.externalId}">${c.name}</td>
+      <td>${c.slotIndex}</td>
+      <td><span class="badge ${c.state}"><span class="dot"></span>${label(c.state)}</span></td>
+      <td class="mono">${c.adbPort ?? '—'}</td>
+      <td class="status-text">${shortImage(c.image)}</td>
+      <td class="status-text">${c.status || '—'}</td>
+      <td>${actionButtons(c)}</td>
+    </tr>`).join('');
+}
+
+function label(state) {
+  return { running: '运行中', created: '已创建', exited: '已停止', unknown: '未知' }[state] ?? state;
+}
+function shortImage(image) {
+  if (!image) return '—';
+  const [repo, tag] = image.split(':');
+  return `${repo.split('/').pop()}${tag ? ':' + tag : ''}`;
+}
+
+function actionButtons(container) {
+  const start = `<button class="mini" data-act="start" data-name="${container.name}" data-slot="${container.slotIndex}">启动</button>`;
+  const stop = container.state === 'running'
+    ? `<button class="mini" data-act="stop" data-name="${container.name}">停止</button>`
+    : '';
+  return `<div class="actions">${start}${stop}</div>`;
+}
+
+async function loadHosts() {
+  state.hosts = await api('/api/hosts');
+  if (!state.current) state.current = state.hosts[0]?.ip ?? null;
+  renderHosts();
+  renderCards();
+  const host = state.hosts.find((h) => h.ip === state.current);
+  const health = $('health');
+  if (host?.online) {
+    health.innerHTML = '<span class="dot" style="background:var(--green)"></span><span>宿主在线</span>';
+  } else {
+    health.innerHTML = '<span class="dot" style="background:#b91c1c"></span><span>宿主离线</span>';
+  }
+}
+
+async function loadContainers() {
+  if (!state.current) return;
+  $('rows').innerHTML = `<tr><td colspan="6" class="empty">加载中…</td></tr>`;
+  try {
+    const data = await api(`/api/containers?host=${encodeURIComponent(state.current)}`);
+    state.containers = data.containers;
+    renderRows();
+  } catch (error) {
+    $('rows').innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`;
+  }
+}
+
+$('hostSelect').addEventListener('change', (event) => {
+  state.current = event.target.value;
+  renderCards();
+  loadContainers();
+});
+$('refresh').addEventListener('click', async () => {
+  await loadHosts();
+  await loadContainers();
+});
+$('search').addEventListener('input', (event) => {
+  state.keyword = event.target.value.trim();
+  renderRows();
+});
+$('tabs').addEventListener('click', (event) => {
+  const target = event.target.closest('.tab');
+  if (!target) return;
+  state.filter = target.dataset.state;
+  for (const tab of document.querySelectorAll('.tab')) tab.classList.toggle('active', tab === target);
+  renderRows();
+});
+
+$('rows').addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-act]');
+  if (!button) return;
+  const name = button.dataset.name;
+  const action = button.dataset.act;
+  const slot = Number(button.dataset.slot);
+  const occupant = state.containers.find(
+    (container) => container.state === 'running' && container.slotIndex === slot && container.name !== name,
+  );
+  const force = action === 'start' && Boolean(occupant);
+  const question = action === 'start'
+    ? (occupant
+      ? `坑位 ${slot} 已被「${occupant.name}」占用。强制启动会先停掉它，继续？`
+      : `启动「${name}」？`)
+    : `停止「${name}」？`;
+  if (!confirm(question)) return;
+
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/actions/${action}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ host: state.current, name, force }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      alert(`${action === 'start' ? '启动' : '停止'}未在超时内确认：当前状态 ${data.state ?? '未知'}，已等待 ${Math.round((data.waitedMs ?? 0) / 1000)}s`);
+    }
+    await loadContainers();
+    await loadHosts();
+  } catch (error) {
+    alert(`请求失败：${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('probe').addEventListener('click', async () => {
+  const running = state.containers.filter((c) => c.state === 'running');
+  if (!running.length) {
+    alert('没有运行中的容器；先启动一台设备。');
+    return;
+  }
+  const target = running[0];
+  const serial = `${target.hostIp}:${target.adbPort}`;
+  const button = $('probe');
+  button.disabled = true;
+  button.textContent = '探测中…';
+  try {
+    // 流程会操作界面，先确认设备已连上 ADB。
+    await fetch('/api/device/connect', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ serial }),
+    });
+    const response = await fetch('/api/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ flowId: 'xhs.probe', serial, deviceId: target.deviceId ?? serial }),
+    });
+    const result = await response.json();
+    if (result.status === 'succeeded') {
+      alert(`探测成功：${result.steps} 个步骤全部通过\n设备 ${serial}`);
+    } else {
+      alert(`探测失败于步骤「${result.failedStep}」\n分类：${result.errorKind}\n${result.message ?? ''}`);
+    }
+  } catch (error) {
+    alert(`请求失败：${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = '跑探测流程';
+  }
+});
+
+$('login').addEventListener('click', async () => {
+  const running = state.containers.filter((c) => c.state === 'running');
+  if (!running.length) {
+    alert('没有运行中的容器；先启动一台设备。');
+    return;
+  }
+  const target = running[0];
+  const serial = `${target.hostIp}:${target.adbPort}`;
+  const phone = prompt(`对 ${serial} 执行手机号登录，请输入手机号（不含区号）：`);
+  if (!phone) return;
+  if (!/^\d{6,15}$/.test(phone)) {
+    alert('手机号格式不正确');
+    return;
+  }
+  const codeUrl = prompt('验证码网页 URL（留空则只做到发码前）：') ?? '';
+
+  const button = $('login');
+  button.disabled = true;
+  button.textContent = '登录中…';
+  try {
+    const response = await fetch('/api/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        flowId: 'xhs.login.phone-prep',
+        serial,
+        deviceId: target.deviceId ?? serial,
+        params: {
+          phone,
+          countryCode: '+86',
+          codeUrl: codeUrl.trim(),
+          stopAfterSendCode: codeUrl.trim() ? 'false' : 'true',
+        },
+      }),
+    });
+    const result = await response.json();
+    if (result.status === 'succeeded') {
+      alert(`登录流程完成：${result.steps} 步\n设备 ${serial}`);
+    } else {
+      alert(`失败于「${result.failedStep}」\n分类：${result.errorKind}\n${result.message ?? ''}`);
+    }
+  } catch (error) {
+    alert(`请求失败：${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = '手机号登录';
+  }
+});
+
+await loadHosts();
+await loadContainers();
+</script>
+</body>
+</html>

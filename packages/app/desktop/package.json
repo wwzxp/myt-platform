@@ -1,0 +1,59 @@
+{
+  "name": "myt-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
+  },
+  "build": {
+    "appId": "com.myt.farm",
+    "productName": "MYT",
+    "artifactName": "${productName}-${version}-Setup.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../client/ui",
+        "to": "ui"
+      },
+      {
+        "from": "../kernel/dist",
+        "to": "kernel"
+      },
+      {
+        "from": "resources/tools",
+        "to": "tools"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "MYT"
+    }
+  },
+  "description": "MYT 云手机设备农场",
+  "author": "MYT",
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  }
+}

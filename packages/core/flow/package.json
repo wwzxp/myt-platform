@@ -1,0 +1,19 @@
+{
+  "name": "@myt/flow",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@myt/device": "workspace:*",
+    "@myt/locator": "workspace:*",
+    "@myt/runs": "workspace:*",
+    "@myt/human": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5"
+  }
+}

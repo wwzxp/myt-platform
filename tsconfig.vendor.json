@@ -1,0 +1,19 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./vendor/cosmokit" },
+    { "path": "./vendor/cordis" },
+    { "path": "./vendor/schemastery" },
+    { "path": "./vendor/loader" },
+    { "path": "./vendor/include" },
+    { "path": "./vendor/group" },
+    { "path": "./vendor/timer" },
+    { "path": "./vendor/hmr" },
+    { "path": "./vendor/logger-console" },
+    { "path": "./packages/util/brand" },
+    { "path": "./packages/typert/protocol" },
+    { "path": "./packages/typert/registry" },
+    { "path": "./packages/typert/generator" },
+    { "path": "./packages/typert/loader" }
+  ]
+}

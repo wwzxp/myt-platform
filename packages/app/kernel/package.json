@@ -1,0 +1,35 @@
+{
+  "name": "@myt/kernel",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/main.ts",
+  "exports": {
+    ".": "./src/kernel.ts"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@myt/automation": "workspace:*",
+    "@myt/device": "workspace:*",
+    "@myt/device-adb": "workspace:*",
+    "@myt/devices": "workspace:*",
+    "@myt/flow": "workspace:*",
+    "@myt/flow-xhs": "workspace:*",
+    "@myt/flow-xhs-device": "workspace:*",
+    "@myt/flow-xhs-publish": "workspace:*",
+    "@myt/human": "workspace:*",
+    "@myt/locator": "workspace:*",
+    "@myt/myt-api-v2": "workspace:*",
+    "@myt/myt-api-v3": "workspace:*",
+    "@myt/myt-host": "workspace:*",
+    "@myt/runs": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

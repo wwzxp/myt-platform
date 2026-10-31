@@ -1,0 +1,22 @@
+{
+  "host_ver": {
+    "code": 200,
+    "data": "QL-q1-2024.v0.2.9.202412201800",
+    "message": "success"
+  },
+  "systeminfo": {
+    "code": 200,
+    "data": {
+      "cpu": 4.7,
+      "devCode": "2117af99d2d77d4e8959c7e872b56a68",
+      "disk_percent": 63.2,
+      "disk_total": 491106508800,
+      "mem_percent": 10.3,
+      "mem_total": 33306669056,
+      "swap_percent": 0.4,
+      "swap_total": 16106123264,
+      "temperatures": 39.769
+    },
+    "message": "success"
+  }
+}

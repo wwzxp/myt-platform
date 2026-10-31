@@ -10,7 +10,11 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tabs/*": {
+      "types": "./lib/types/tabs/*.d.ts",
+      "default": "./lib/types/tabs/*.js"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-host-webserver": "workspace:~",

@@ -51,7 +51,7 @@ export interface LoginApiConfig {
  */
 export class LoginApi extends Service {
   /** 依赖：Web 服务、宿主 SDK、设备注册表、任务记录。 */
-  static inject = ['webServer', 'mytHost', 'mytHostV3', 'devices', 'runs', 'flows', 'deviceControl']
+  static inject = ['webServer', 'mytHost', 'mytHostV3', 'devices', 'runs', 'flows', 'deviceControl', 'xhsPack']
 
   private readonly sourceStore: SourceStore
   private readonly importConfigStore: ImportConfigStore
@@ -135,6 +135,21 @@ export class LoginApi extends Service {
       path: '/api/tabs/login/llm',
       handler: (req, res) => void this.llm(req, res),
     })
+  }
+
+  /**
+   * 当前可用的 UI 动作。
+   *
+   * 优先取 `ctx.xhsPack`（业务包装配后提供）；未装配时回落到构造配置。
+   * 这样 `xhs-login` 不依赖具体的流程包，而流程包也不需要反向依赖它。
+   */
+  private actionsOf(): ReadonlyArray<ActionDefinition> {
+    return this.ctx.xhsPack.actions ?? this.config.actions ?? []
+  }
+
+  /** 当前登录链配方；来源同 `actionsOf`。 */
+  private chainOf(): ChainRecipe | null {
+    return this.ctx.xhsPack.chain ?? this.config.recipe ?? null
   }
 
   /** 设备行：设备 × 任务 × 登录源合成 UI 表格。 */
@@ -257,7 +272,7 @@ export class LoginApi extends Service {
   /** 可用任务清单：单项任务与动作定义，供 UI 渲染表单。 */
   private tasks(req: IncomingMessage, res: ServerResponse): void {
     if (req.method !== 'GET') return methodNotAllowed(res, req.method)
-    const actions = this.config.actions ?? []
+    const actions = this.actionsOf()
     sendJson(res, 200, {
       singles: buildSingleTasks(actions),
       actions,
@@ -271,7 +286,7 @@ export class LoginApi extends Service {
     const body = await readJson(req)
     const rows = (body['rows'] ?? []) as Array<{ deviceId: string; serial: string; activeRunId?: string }>
     if (rows.length === 0) return sendJson(res, 200, { ok: false, reason: '请先选择设备' })
-    const actions = this.config.actions ?? []
+    const actions = this.actionsOf()
     const flows = buildChainFlows(actions)
     const action = String(body['action'] ?? '')
     if (action && flows[action] === undefined && action !== 'login') {
@@ -285,7 +300,7 @@ export class LoginApi extends Service {
     if (req.method !== 'POST') return methodNotAllowed(res, req.method)
     const body = await readJson(req)
     const action = String(body['action'] ?? '')
-    const actions = this.config.actions ?? []
+    const actions = this.actionsOf()
     const flows = buildChainFlows(actions)
     const flowId = flows[action] ?? ''
     if (!flowId) return sendJson(res, 400, { error: `未知动作：${action}` })
@@ -318,7 +333,7 @@ export class LoginApi extends Service {
           )
           return result.status === 'succeeded'
         },
-        chainFlows: () => buildChainFlows(this.config.actions ?? []),
+        chainFlows: () => buildChainFlows(this.actionsOf()),
         yadbPath: this.config.yadbPath ?? 'yadb',
         runPreStep: (chain, action, signal, pool) =>
           runPreStep(action, chain, signal, {
@@ -338,7 +353,7 @@ export class LoginApi extends Service {
               )
               return result.status === 'succeeded'
             },
-            chainFlows: () => buildChainFlows(this.config.actions ?? []),
+            chainFlows: () => buildChainFlows(this.actionsOf()),
             startRun: (flowId, deviceId, serial) => this.ctx.runs.start({ flowId, deviceId, serial }),
             stepStarted: (runId, stepId, label) => this.ctx.runs.stepStarted(runId, stepId, label),
             stepSucceeded: (runId, stepId, ms, note) => this.ctx.runs.stepSucceeded(runId, stepId, ms, note),
@@ -352,7 +367,7 @@ export class LoginApi extends Service {
         },
         schedule: (delayMs, fn) => setTimeout(fn, delayMs),
       },
-      this.config.recipe ?? null,
+      this.chainOf(),
     )
     if (result.ok) sendJson(res, 200, { accepted: result.accepted, flags: result.flags })
     else sendJson(res, result.status, { error: result.error })
@@ -474,6 +489,16 @@ function message(error: unknown): string {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     loginApi: LoginApi
+    /**
+     * 小红书业务包（由 `@myt/xhs-pack` 提供）。
+     *
+     * 声明为可选：`xhs-login` 与 `xhs-pack` 互相需要对方的产出，用可选属性
+     * 断掉编译期循环，运行时由 profile 保证两者都装配。
+     */
+    xhsPack: {
+      readonly actions: ReadonlyArray<ActionDefinition>
+      readonly chain: ChainRecipe
+    }
   }
 }
 

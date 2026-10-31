@@ -64,6 +64,12 @@
     - id: device-api
       name: '@myt/device-api'
 
+    # ── 小红书业务包装配（注册流程 + 暴露动作/链配方）──
+    - id: xhs-pack
+      name: '@myt/xhs-pack'
+      config:
+        dataDir: './data'
+
     # ── 登录类 HTTP 接口（设备行 / 登录源 / 批量登录）──
     - id: xhs-login
       name: '@myt/xhs-login'

@@ -50,7 +50,11 @@ export class SystemApi extends Service {
 
   [Service.init](): void {
     const server = this.ctx.webServer
-    const hosts = this.config.hosts ?? []
+    // 宿主列表优先取配置，其次读环境变量（壳通过 MYT_HOSTS 传入，逗号分隔）。
+    const hosts = this.config.hosts ?? (process.env['MYT_HOSTS'] ?? '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0)
 
     server.register({
       kind: 'exact',

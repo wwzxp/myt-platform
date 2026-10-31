@@ -111,7 +111,7 @@ export class WorkflowStore extends Service {
 
   constructor(ctx: ConstructorParameters<typeof Service>[0], config: WorkflowsConfig = {}) {
     super(ctx, 'workflows')
-    this.dir = config.dir
+    this.dir = config.dir ?? (process.env['MYT_DATA_DIR'] ? join(process.env['MYT_DATA_DIR'], 'workflows') : undefined)
   }
 
   /**

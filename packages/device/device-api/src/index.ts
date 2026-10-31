@@ -37,7 +37,8 @@ export class DeviceApi extends Service {
 
   constructor(ctx: ConstructorParameters<typeof Service>[0], config: DeviceApiConfig = {}) {
     super(ctx, 'deviceApi')
-    this.defaultHost = config.defaultHost
+    const envHost = (process.env['MYT_HOSTS'] ?? '').split(',')[0]?.trim()
+    this.defaultHost = config.defaultHost ?? (envHost || undefined)
   }
 
   [Service.init](): void {

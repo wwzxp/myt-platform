@@ -17,6 +17,7 @@ import type {} from '@myt/runs'
 import { FlowRunner } from '@myt/flow'
 import type { ActionDefinition, ChainRecipe } from '@myt/flow'
 import { SourceStore, normalizeSource, EMPTY_SOURCE } from './tabs/device-source.ts'
+import { loadLlmConfig } from './tabs/llm-config.ts'
 
 import { ImportConfigStore, pickUnusedBindAccount, syncAllAccountsToFile, syncNicknameTxt, syncProxyTxt, updateBindAccountStatus } from './tabs/import-config.ts'
 import { buildChainFlows, buildSingleTasks } from './tabs/login-tab.ts'
@@ -41,6 +42,8 @@ export interface LoginApiConfig {
   yadbPath?: string
   /** 本地机型库路径；SDK 不可达时的回落。 */
   devicesJson?: string
+  /** ADBKeyboard.apk 路径；中文输入依赖它。 */
+  adbKeyboardApk?: string
 }
 
 /**
@@ -56,6 +59,10 @@ export class LoginApi extends Service {
   private readonly sourceStore: SourceStore
   private readonly importConfigStore: ImportConfigStore
   private readonly config: LoginApiConfig
+  /** deviceId → 取消句柄；批量任务并行时按设备取消。 */
+  private readonly cancels = new Map<string, AbortController>()
+  /** LLM 配置文件路径。 */
+  private readonly llmConfigFile: string
   /** 流程执行器；由 `runs` 与 `deviceControl` 组合而成。 */
   private readonly runner: FlowRunner
 
@@ -65,6 +72,7 @@ export class LoginApi extends Service {
     this.sourceStore = new SourceStore(join(config.dataDir, 'device-sources.json'))
     this.importConfigStore = new ImportConfigStore(join(config.dataDir, 'import-config.json'))
     this.runner = new FlowRunner(ctx.runs, ctx.deviceControl)
+    this.llmConfigFile = join(config.dataDir, 'llm-config.json')
   }
 
   [Service.init](): void {
@@ -150,6 +158,32 @@ export class LoginApi extends Service {
   /** 当前登录链配方；来源同 `actionsOf`。 */
   private chainOf(): ChainRecipe | null {
     return this.ctx.xhsPack.chain ?? this.config.recipe ?? null
+  }
+
+  /**
+   * 推送 yadb 与设置输入法。
+   *
+   * 两者都是「尽力而为」：失败只记日志，不阻断登录——旧实现同样如此。
+   * 中文输入依赖 ADBKeyboard，yadb 通道依赖本地二进制，缺任一都会有功能降级，
+   * 但登录本身仍可跑。
+   * @param chain - 链状态（取 serial 与开关）。
+   */
+  private async prepareDevice(chain: { serial: string; run: { flags: Record<string, unknown> } }): Promise<void> {
+    const imeOn = chain.run.flags['setAdbIme'] !== false && chain.run.flags['setAdbIme'] !== 'false'
+    if (imeOn) {
+      try {
+        await this.ctx.deviceControl.ensureIme(chain.serial)
+      } catch (error) {
+        this.ctx.logger?.warn?.(`[chain:${chain.serial}] 设置输入法失败（继续）: ${message(error)}`)
+      }
+    }
+    if (this.config.yadbPath) {
+      try {
+        await this.ctx.deviceControl.ensureYadb(chain.serial, this.config.yadbPath)
+      } catch (error) {
+        this.ctx.logger?.warn?.(`[chain:${chain.serial}] 推送 yadb 失败: ${message(error)}`)
+      }
+    }
   }
 
   /** 设备行：设备 × 任务 × 登录源合成 UI 表格。 */
@@ -364,6 +398,17 @@ export class LoginApi extends Service {
         recordOrchestrationError: (msg) => {
           this.ctx.runs.start({ flowId: 'login-orchestration', deviceId: '', serial: '' })
           void msg
+        },
+        prepareDevice: (chain) => this.prepareDevice(chain),
+        getSource: async (deviceId) => (await this.sourceStore.get(deviceId)) ?? { kind: 'none', value: '' },
+        pickBindAccount: (config) => pickUnusedBindAccount(config as never),
+        updateBindAccount: async (index, statusText, serial) => {
+          await updateBindAccountStatus(this.importConfigStore, index, statusText, serial)
+        },
+        loadLlm: async () => loadLlmConfig(this.llmConfigFile),
+        setCancel: (deviceId, controller) => {
+          if (controller) this.cancels.set(deviceId, controller)
+          else this.cancels.delete(deviceId)
         },
         schedule: (delayMs, fn) => setTimeout(fn, delayMs),
       },

@@ -9,6 +9,8 @@
 import type { ChainRecipe, FlowDefinition } from '@myt/flow'
 import { HeroSmsClient, loginWithHeroSms } from '@myt/flow-xhs'
 import { advanceChain, beginChain } from './tabs/login-chain.ts'
+import { loginParamsOf, runChain } from './chain-runner.ts'
+import type { ChainDeps } from './chain-runner.ts'
 import type { ChainState, ChainStep } from './tabs/login-chain.ts'
 import { hostIpOf, planIpBatches } from './tabs/job-scheduler.ts'
 import { ProxyPool, requiredProxyCount } from './tabs/proxy-pool.ts'
@@ -20,7 +22,7 @@ export interface Deps {
   /** 某设备是否已有运行中的任务。 */
   hasRunningRun(deviceId: string): boolean
   /** 读取持久化的批导入配置。 */
-  loadImportConfig(): Promise<object>
+  loadImportConfig(): Promise<{ bindAccounts: Array<{ phone: string; url: string }> }>
   /** 执行登录前动作（容器切换 / 代理 / 一键新机）；成功返回 true。 */
   runPreStep(
     chain: ChainState,
@@ -36,6 +38,24 @@ export interface Deps {
   chainFlows(): Readonly<Record<string, string>>
   /** yadb 路径；随应用分发。 */
   yadbPath: string
+  /**
+   * 推送 yadb 与设置输入法（尽力而为，失败不阻断）。
+   * 中文输入依赖 ADBKeyboard，yadb 通道依赖本地二进制。
+   */
+  prepareDevice(chain: ChainState): Promise<void>
+  /** 读设备登录源；无来源时返回空字符串值。 */
+  getSource(deviceId: string): Promise<{ kind: string; value: string }>
+  /** 取一条未使用的绑定账号。 */
+  pickBindAccount(config: { bindAccounts: Array<{ phone: string; url: string }> }): {
+    account: { phone: string; url: string } | null
+    index: number
+  }
+  /** 回写绑定账号状态。 */
+  updateBindAccount(index: number, statusText: string, serial: string): Promise<void>
+  /** 读 LLM 配置。 */
+  loadLlm(): Promise<{ baseUrl: string; model: string; apiKey: string }>
+  /** 记录/清除该设备的取消句柄。 */
+  setCancel(deviceId: string, controller: AbortController | null): void
   /** 记录一条编排层异常（没有对应 run 记录时用）。 */
   recordOrchestrationError(message: string): void
   /** 延迟调用（测试可替换成立即执行）。 */
@@ -168,14 +188,6 @@ export async function startBatchLogin(
   const controller = new AbortController()
   const flows = deps.chainFlows()
 
-  const runLoginOnce = async (chain: ChainState, params: Record<string, string>): Promise<boolean> => {
-    const flowId = flows['login'] ?? ''
-    if (!flowId) return false
-    const flow = deps.resolveFlow(flowId, params)
-    if (!flow) return false
-    return deps.runFlow(flow, chain, params, controller.signal)
-  }
-
   // 重试前清数据：只有勾了 clearData 才跑。
   const clearBeforeRetry = async (chain: ChainState): Promise<void> => {
     const clearData = chain.run.flags['clearData'] === true || chain.run.flags['clearData'] === 'true'
@@ -187,9 +199,26 @@ export async function startBatchLogin(
     await deps.runFlow(flow, chain, {}, controller.signal)
   }
 
+  /** 把编排层的 `Deps` 适配成链执行器要的形状。 */
+  const chainDeps = (_chain: ChainState): ChainDeps => ({
+    resolveFlow: deps.resolveFlow,
+    runFlow: deps.runFlow,
+    chainFlows: deps.chainFlows,
+    getSource: deps.getSource,
+    loadImportConfig: deps.loadImportConfig,
+    pickBindAccount: deps.pickBindAccount,
+    updateBindAccount: deps.updateBindAccount,
+    loadLlm: deps.loadLlm,
+    prepareDevice: deps.prepareDevice,
+    yadbPath: deps.yadbPath,
+    setCancel: deps.setCancel,
+    recordError: (_c, msg) => deps.recordOrchestrationError(msg),
+  })
+
   const executeChain = async (chain: ChainState): Promise<void> => {
     try {
       if (!recipe) return
+      // 前置动作（容器切换 / 代理 / 一键新机）先走完，再进主链。
       let step: ChainStep | null = beginChain(recipe, chain)
       while (step && step.action !== 'login') {
         const ok = await deps.runPreStep(
@@ -204,25 +233,23 @@ export async function startBatchLogin(
       if (!step) return
 
       const hero = heroFlagsOf(chain.run.flags)
-      let succeeded: boolean
+      const login = loginParamsOf(chain, input.login)
       if (runFlags['smsProvider'] === 'herosms' && hero) {
         // HeroSMS 编排自带 2 次重试与 finally 取消，外层不再叠加 retryRemaining。
         const client = new HeroSmsClient(hero.apiKey)
-        const params = paramsOf(chain.run.flags)
         const outcome = await loginWithHeroSms({
           client,
           countryId: hero.countryId ?? 0,
           countryCode: String(chain.run.flags['smsCountryCode'] ?? ''),
           maxPrice: Number(chain.run.flags['smsMaxPrice'] ?? 0),
-          attemptLogin: async (phone, activationId) =>
-            runLoginOnce(chain, { ...params, phone, activationId }),
+          attemptLogin: async (phone) =>
+            runChain(chain, 'login', recipe, { ...login, phone }, chainDeps(chain)),
         })
-        succeeded = outcome.ok === true
+        if (!outcome.ok) await clearBeforeRetry(chain)
       } else {
-        succeeded = await runLoginOnce(chain, paramsOf(chain.run.flags))
+        // 主链：登录成功后按配方继续（改资料 → 绑定 → 关注 → 收尾）。
+        await runChain(chain, 'login', recipe, login, chainDeps(chain))
       }
-
-      if (!succeeded) await clearBeforeRetry(chain)
     } catch (error) {
       deps.recordOrchestrationError(error instanceof Error ? error.message : String(error))
     }
@@ -253,14 +280,3 @@ function heroFlagsOf(flags: Record<string, unknown>): HeroSmsFlags | null {
   return { apiKey: hero.apiKey, countryId: hero.countryId }
 }
 
-/**
- * 从 runFlags 里拼出登录参数（只取字符串字段）。
- * @param flags - 运行开关快照。
- */
-function paramsOf(flags: Record<string, unknown>): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const [key, value] of Object.entries(flags)) {
-    if (typeof value === 'string') out[key] = value
-  }
-  return out
-}

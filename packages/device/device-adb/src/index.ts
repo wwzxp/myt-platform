@@ -148,9 +148,9 @@ export class AdbDeviceControl extends DeviceControl {
 
   constructor(ctx: Context, config: AdbProviderConfig = {}) {
     super(ctx)
-    this.adbPath = config.adbPath ?? 'adb'
+    this.adbPath = config.adbPath ?? process.env['MYT_ADB_PATH'] ?? 'adb'
     this.timeoutMs = config.timeoutMs ?? 20_000
-    this.adbKeyboardApk = config.adbKeyboardApk
+    this.adbKeyboardApk = config.adbKeyboardApk ?? process.env['MYT_ADB_KEYBOARD_APK']
     this.random = new Random(config.seed)
     this.policy = config.humanPolicy ?? DEFAULT_HUMAN_POLICY
   }

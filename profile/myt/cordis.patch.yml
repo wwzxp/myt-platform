@@ -40,6 +40,8 @@
     # ── 流程图持久化 ──
     - id: workflows
       name: '@myt/workflows'
+      config:
+        dir: './data/workflows'
 
     - id: workflow-api
       name: '@myt/workflow-api'
@@ -59,6 +61,8 @@
     # ── 单机控制（adb）──
     - id: device-adb
       name: '@myt/device-adb'
+      config:
+        adbPath: 'adb'
 
     # ── 设备类 HTTP 接口（容器启停 / 设备清单 / 单机操作）──
     - id: device-api

@@ -265,7 +265,12 @@ export class AdbDeviceControl extends DeviceControl {
         channel === 'yadb'
           ? await this.dumpViaYadb(serial)
           : await (async () => {
-              await this.runShell(serial, ['shell', 'uiautomator', 'dump', '/sdcard/myt_ui.xml'])
+              // 退出码不能当成功信号：`uiautomator dump` 在部分 ROM 上写完文件后
+              // 自身崩溃（实测 exit 139 / SIGSEGV），但 XML 已正确落盘。
+              // 真正的判据是紧接着的 `cat` 能否读到合法 XML——所以这里吞掉退出码。
+              await this.runShell(serial, ['shell', 'uiautomator', 'dump', '/sdcard/myt_ui.xml']).catch(
+                () => undefined,
+              )
               return this.runShell(serial, ['shell', 'cat', '/sdcard/myt_ui.xml'])
             })()
       const root = parseUiXml(xml)

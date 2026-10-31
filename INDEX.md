@@ -105,6 +105,8 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-01 15:00:00 | bug修复 | `packages/app/desktop-host/src/host.ts` | 监听端口被忽略：webserver 只读 config 不读启动参数，改生成 overlay 补丁注入端口（按 id 更新，非新增） |
+| 2026-11-01 15:00:00 | bug修复 | `packages/client/app/src/editor.tsx` | 首屏白屏：useMemo 在 `if (!fileName)` 守卫前执行 `(fileName as string).replace`，不带 `?flow=` 打开必崩 |
 | 2026-11-01 12:00:00 | 修改 | `packages/automation/automation/src/graph/types.ts` | 节点形状统一为 `NodeData`（`inputsValues`/`inputs`/`outputs`）+ `FlowValue`（constant/ref/template）；`LocateConfig` 加三种定位模式 |
 | 2026-11-01 12:00:00 | 新增 | `packages/automation/automation/src/graph/inputs.ts` | 节点输入求值：`parseNodeInputs` + `strInput`/`numInput`/`boolInput`/`listInput` |
 | 2026-11-01 12:00:00 | 修改 | `packages/automation/automation/src/graph/run.ts` | `switch(node.type)` 换成 `EXECUTORS` 注册表；动作节点支持 intent/point/ratio 三种定位；`GraphRuntime.outputs` 记录产出供下游 `ref` |

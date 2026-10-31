@@ -7,6 +7,8 @@
  */
 
 import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProfile } from '@deepseek-ai/dsh/profile-boot'
 import { loadProfileDirectory, loadLayeredEnv } from '@deepseek-ai/dsh-app-boot'
@@ -36,11 +38,31 @@ const profileDir = process.env['MYT_PROFILE_DIR'] ?? join(repoRoot, 'profile', '
 const anchor = join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
 const profile = loadProfileDirectory('dsh', profileDir, anchor)
 
+/**
+ * 把监听端口写成一个 overlay 补丁。
+ *
+ * 为什么必须这样：`webserver` 只从自身 config 读端口，不读启动参数；
+ * profile 的 YAML 又不支持环境变量插值。壳算好端口后必须让它真正生效——
+ * 否则服务监听在随机端口，壳拿自己那个端口做健康检查会一直失败。
+ *
+ * @param listenPort - 壳指定的端口；0 表示让系统分配。
+ * @returns 补丁文件路径。
+ */
+async function writePortPatch(listenPort: number): Promise<string> {
+  const file = join(tmpdir(), 'myt-host-port.yml')
+  await writeFile(
+    file,
+    `- id: webserver\n  config:\n    host: '127.0.0.1'\n    port: ${listenPort}\n`,
+    'utf8',
+  )
+  return file
+}
+
 const { ctx } = await runProfile({
   environment: loadLayeredEnv('dsh'),
   profile: 'myt',
   resolvedProfile: { profile, installAnchor: anchor },
-  patchFiles: [],
+  patchFiles: [await writePortPatch(port)],
   args: ['--no-open', '--host', '127.0.0.1', '--port', String(port)],
 })
 

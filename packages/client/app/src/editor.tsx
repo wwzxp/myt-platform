@@ -103,7 +103,9 @@ export const Editor = () => {
   const contextValue = useMemo<WorkflowContextValue>(
     () => ({
       fileName: fileName as string,
-      name: (fileName as string).replace(/\.json$/u, ''),
+      // 没选流程时也要能渲染：下面虽然有 `if (!fileName)` 守卫，但 useMemo
+      // 在守卫之前执行，直接 replace 会在首屏就抛错、整页白屏。
+      name: fileName ? fileName.replace(/\.json$/u, '') : '',
       saveState,
       ...(saveError === undefined ? {} : { saveError }),
       save: () => save(doc ?? {}),

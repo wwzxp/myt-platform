@@ -111,15 +111,15 @@ async function choosePort(preferred) {
 
 function kernelEntry() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'kernel', 'host.mjs')
+    return path.join(process.resourcesPath, 'host', 'startup.mjs')
   }
-  return path.join(__dirname, '..', '..', 'kernel', 'dist', 'host.mjs')
+  return path.join(__dirname, '..', '..', 'desktop-host', 'lib', 'startup.js')
 }
 
 function startKernel(port) {
   const entry = kernelEntry()
   if (!fs.existsSync(entry)) {
-    throw new Error(`内核入口不存在：${entry}（先执行 pnpm build:kernel）`)
+    throw new Error(`宿主入口不存在：${entry}（先执行 pnpm build:host）`)
   }
   // 工具链随包分发：发布版取 resources/tools，开发版回落到旧项目的 apk 目录。
   const toolsDir = app.isPackaged

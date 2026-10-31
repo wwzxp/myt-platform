@@ -42,7 +42,7 @@ export class DeviceRegistry extends Service {
 
   constructor(ctx: ConstructorParameters<typeof Service>[0], config: DeviceRegistryConfig = {}) {
     super(ctx, 'devices')
-    this.stateFile = config.stateFile
+    this.stateFile = config.stateFile ?? process.env['MYT_STATE_FILE']
   }
 
   private async ensureLoaded(): Promise<void> {

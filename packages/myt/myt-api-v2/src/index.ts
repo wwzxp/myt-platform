@@ -47,7 +47,7 @@ export class MytApiV2 extends MytHost {
 
   constructor(ctx: Context, config: MytApiV2Config = {}) {
     super(ctx)
-    this.baseUrl = (config.baseUrl ?? 'http://127.0.0.1:7878').replace(/\/+$/, '')
+    this.baseUrl = (config.baseUrl ?? process.env['MYT_SDK_BASE'] ?? 'http://127.0.0.1:7878').replace(/\/+$/, '')
     this.timeoutMs = config.timeoutMs ?? 8000
   }
 

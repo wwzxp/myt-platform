@@ -1,0 +1,33 @@
+{
+  "name": "@myt/desktop-host",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "lib/startup.js",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./host": {
+      "types": "./lib/types/host.d.ts",
+      "default": "./lib/host.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:~"
+  },
+  "types": "lib/types/index.d.ts",
+  "files": [
+    "lib/index.js",
+    "lib/host.js",
+    "lib/types/**/*.d.ts",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsdown"
+  }
+}

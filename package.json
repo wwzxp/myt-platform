@@ -4,11 +4,11 @@
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "dev": "node --import tsx packages/app/kernel/src/main.ts",
-    "build:kernel": "pnpm --filter @myt/kernel build",
-    "dev:desktop": "pnpm build:kernel && pnpm --filter myt-desktop start",
-    "dist": "pnpm build:kernel && pnpm --filter myt-desktop dist",
-    "typecheck": "tsc --noEmit"
+    "dev": "node --import tsx packages/app/desktop-host/src/host.ts",
+    "dev:desktop": "pnpm build:host && pnpm --filter myt-desktop start",
+    "dist": "pnpm build:host && pnpm --filter myt-desktop dist",
+    "typecheck": "tsc --noEmit",
+    "build:host": "pnpm --filter @myt/desktop-host build"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",

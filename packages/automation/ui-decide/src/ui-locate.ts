@@ -57,10 +57,15 @@ export function buildLocatePrompt(
   withRegion = true,
 ): string {
   const list = renderTargets(targets, { withRegion })
+  // 「只输出一个」必须写死并重复一次：实测 minicpm46 在候选多（18+）时
+  // 会输出 `{"index":[17,19,25,...]}` 这样的数组，64 token 装不下被截断，
+  // 整次定位作废。约束成单选后输出稳定在 10 token 内。
   return `${list}
 
 目标：${intent}
-只输出序号：{"index":N}`
+从上面的候选里选出**唯一一个**最匹配的，只输出它的序号。
+不要输出多个，不要解释。
+格式：{"index":N}`
 }
 
 /**
@@ -79,6 +84,9 @@ export function parseLocateIndex(raw: string): number | null {
     const value = parsed.index
     // 数字、字符串、数组都接受：实测 minicpm46 会输出 `{"index":"3"}` 这种字符串形式。
     if (Array.isArray(value)) {
+      // 只接受单选。模型给出多个说明它没把握——此时随便挑一个会点错，
+      // 交给 `optional` / 兜底定位器处理更安全。
+      if (value.length !== 1) return null
       const first = Number(value[0])
       return Number.isFinite(first) ? first : null
     }

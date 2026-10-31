@@ -355,7 +355,19 @@ export interface GraphOutcome {
    */
   ok: boolean
   /** 实际执行轨迹：节点 id → 走的端口。 */
-  trail: Array<{ node: string; port?: PortId; ms: number }>
+  trail: Array<{
+    node: string
+    port?: PortId
+    ms: number
+    /**
+     * 该节点的失败/跳过原因。
+     *
+     * 有值时即使端口有连线也会一路带到最终 `reason`——
+     * 否则「失败→连到下一个节点→最终中止」时原因会丢，
+     * 只剩一句「经 failure 端口中止」，无法定位。
+     */
+    reason?: string
+  }>
   /** 失败时停在哪个节点。 */
   failedAt?: string | undefined
   /** 失败原因。 */

@@ -164,10 +164,12 @@ export async function runGraph(
       // - true/false：条件分支的汇合（两条都是正常路径）
       const successPorts: PortId[] = ['out', 'success', 'done', 'true', 'false']
       const ok = enteredFrom === undefined || successPorts.includes(enteredFrom)
+      // 中止时把链路上第一个节点级原因带出来，否则只剩「经 X 端口中止」。
+      const cause = trail.find((step) => step.reason !== undefined)?.reason
       return {
         ok,
         trail,
-        reason: ok ? undefined : `经「${enteredFrom}」端口中止`,
+        reason: ok ? undefined : (cause ?? `经「${enteredFrom}」端口中止`),
         ms: Date.now() - startedAt,
       }
     }
@@ -185,7 +187,12 @@ export async function runGraph(
     }
     // 记下产出，供下游 `ref` / `template` 取值。
     if (result.outputs) runtime.outputs?.set(node.id, result.outputs)
-    trail.push({ node: node.id, port: result.port, ms: Date.now() - nodeStartedAt })
+    trail.push({
+      node: node.id,
+      port: result.port,
+      ms: Date.now() - nodeStartedAt,
+      ...(result.reason === undefined ? {} : { reason: result.reason }),
+    })
 
     const next = edgesByPort.get(`${node.id}:${result.port}`)
     if (!next) {
@@ -247,6 +254,63 @@ async function waitForRequiredPage(
     page = await currentPage(ctx, runtime.pages)
   }
   return { ok: expect.includes(page), page }
+}
+
+/**
+ * 轮询等待「页面或元素就绪」，就绪不了就重开深链再试。
+ *
+ * 对应 step 版 `wait-gallery` 的语义：
+ * ```
+ * for (5 轮) {
+ *   等待；页面在期望内 → 成功
+ *   元素存在 → 成功
+ *   重开深链；再等 6 秒；到了 → 成功
+ * }
+ * 抛错
+ * ```
+ *
+ * @param ctx - 步骤上下文。
+ * @param runtime - 运行时依赖。
+ * @param spec - 接受页、就绪元素、深链、轮数、间隔、每轮等待。
+ */
+async function retryUntilReady(
+  ctx: StepContext,
+  runtime: GraphRuntime,
+  spec: {
+    acceptPages: readonly string[]
+    readyLocators: readonly string[]
+    openUri: string
+    /** 目标包名；省略时交给 `openUri` 自行解析。 */
+    packageName: string
+    rounds: number
+    gap: readonly [number, number]
+    waitPerRound: number
+  },
+): Promise<boolean> {
+  for (let round = 0; round < spec.rounds; round += 1) {
+    ctx.throwIfCancelled()
+    await sleepRandom(ctx, spec.gap[0], spec.gap[1])
+
+    // ① 页面已就绪
+    const page = await currentPage(ctx, runtime.pages)
+    if (spec.acceptPages.includes(page)) return true
+
+    // ② 页面未变但元素已出现（例如权限弹窗盖在相册上）
+    if (spec.readyLocators.length > 0) {
+      ctx.invalidateSnapshot?.()
+      const snapshot = await ctx.snapshot({ refresh: true })
+      for (const name of spec.readyLocators) {
+        const locator = runtime.locators[name]
+        if (locator?.(snapshot.root)) return true
+      }
+    }
+
+    // ③ 重开深链，再等一轮
+    await ctx.device.openUri(ctx.serial, spec.openUri, spec.packageName || undefined)
+    const arrived = await waitForRequiredPage(ctx, runtime, spec.acceptPages, spec.waitPerRound)
+    if (arrived.ok) return true
+  }
+  return false
 }
 
 /**
@@ -417,6 +481,30 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
       numInput(inputs, 'actDurationMs', 300),
     )
     if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+
+  // ④.4 轮询等待 + 重开深链：对应 step 版 wait-gallery 的 5 轮循环。
+  // 每轮：判页面 → 判元素 → 重开深链 → 再等。
+  // 单独做成一个能力，是因为「页面对但内容没加载」这类等待无法用
+  // requires（它只看页面 id）或 readyLocator（它只看元素）单独表达。
+  const retryOpenUri = strInput(inputs, 'retryOpenUri')
+  if (retryOpenUri) {
+    const ok = await retryUntilReady(ctx, runtime, {
+      acceptPages: listInput(inputs, 'acceptPages'),
+      readyLocators: listInput(inputs, 'readyLocators'),
+      openUri: retryOpenUri,
+      packageName: strInput(inputs, 'packageName'),
+      rounds: Math.max(1, numInput(inputs, 'rounds', 5)),
+      gap: [numInput(inputs, 'gap', 0.5), numInput(inputs, 'gap', 0.5) + 0.5],
+      waitPerRound: numInput(inputs, 'roundWaitSeconds', 6),
+    })
+    if (!ok) {
+      return {
+        port: boolInput(inputs, 'optional', false) ? 'success' : 'failure',
+        reason: `轮询 ${Math.max(1, numInput(inputs, 'rounds', 5))} 轮后仍未就绪`,
+      }
+    }
     return { port: 'success' }
   }
 

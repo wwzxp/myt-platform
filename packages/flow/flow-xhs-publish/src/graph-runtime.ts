@@ -34,13 +34,15 @@ import {
 import {
   DEEPLINK_HOME,
   DEEPLINK_PROFILE,
+  DEEPLINK_PUBLISH_IMAGE,
   XHS_PACKAGE,
+  pagesOf,
   pullToRefresh,
   scrollAlbumPage,
   submitNote,
   verifyPublished,
 } from './shared.ts'
-import { sleepRandom, tapHuman } from '@myt/automation'
+import { currentPage, sleepRandom, tapHuman, waitForPage } from '@myt/automation'
 
 /**
  * 把 JSON 图跑起来：注入小红书专属的定位器与自定义动作。
@@ -88,6 +90,10 @@ export const XHS_ACTIONS = {
     await ctx.device.ensureIme(ctx.serial).catch(() => undefined)
     if (!ctx.yadbPath) throw new Error('未配置 yadb 路径（MYT_YADB_PATH）')
     await ctx.device.ensureYadb(ctx.serial, ctx.yadbPath)
+    // 已经在首页或个人页就不必再跳一次：与 step 版一致。
+    // 每次重开深链会让小红书多加载一屏，冷启动时还可能触发开屏广告。
+    const page = await safeCurrentPage(ctx)
+    if (page === 'home' || page === 'profile') return
     await ctx.device.openUri(ctx.serial, DEEPLINK_HOME, XHS_PACKAGE)
     await sleepRandom(ctx, 2, 3)
   },
@@ -105,8 +111,36 @@ export const XHS_ACTIONS = {
   async waitGallery(ctx: StepContext): Promise<void> {
     await ctx.device.openUri(ctx.serial, DEEPLINK_PROFILE, XHS_PACKAGE)
     await sleepRandom(ctx, 2, 3)
-    await ctx.device.openUri(ctx.serial, 'xhsdiscover://post_note/', XHS_PACKAGE)
-    await sleepRandom(ctx, 2, 3)
+    await ctx.device.openUri(ctx.serial, DEEPLINK_PUBLISH_IMAGE, XHS_PACKAGE)
+
+    // 与 step 版 `wait-gallery` 一致：最多 5 轮，每轮
+    //   等 0.5–1s → 判页面 → 判元素 → 重开深链 → 再等 6s。
+    // 为什么不能只重开一次：网络慢或冷启动时相册要好几秒才出内容，
+    // 单次重开常常还在白屏，后续选图必然失败。
+    for (let i = 0; i < 5; i += 1) {
+      await sleepRandom(ctx, 0.5, 1.0)
+      const page = await safeCurrentPage(ctx)
+      if (page === 'album' || page === 'photo-picker' || page === 'permission') return
+
+      const snapshot = await ctx.snapshot({ refresh: true })
+      if (getAllowAlbumButtonPosition(snapshot.root) || isGalleryPagePresent(snapshot.root)) {
+        await sleepRandom(ctx, 0.5, 1.0)
+        return
+      }
+
+      await ctx.device.openUri(ctx.serial, DEEPLINK_PUBLISH_IMAGE, XHS_PACKAGE)
+      await sleepRandom(ctx, 2, 3)
+      if ((await safeCurrentPage(ctx)) !== null) {
+        const arrived = await waitForPage(
+          ctx,
+          pagesOf(ctx),
+          ['album', 'photo-picker', 'permission'],
+          6_000,
+        )
+        if (arrived === 'album' || arrived === 'photo-picker' || arrived === 'permission') return
+      }
+    }
+    throw new Error('相册未加载')
   },
 
   /** 选图：算坐标列表 → 逐个点击 → 不够就滚动补选。 */
@@ -207,6 +241,23 @@ export const XHS_VERIFIERS = {
     const snapshot = await ctx.snapshot({ refresh: true })
     return findButtonByText(snapshot.root, ['下一步']) !== null
   },
+}
+
+/**
+ * 读当前页面；上下文没带页面注册表时返回 null。
+ *
+ * custom 动作在画布引擎里由 `runGraph` 调用，`ctx.app` 未必有注册表
+ * （脚本直跑时通常没有）。判不了页面时应当「不判」而不是抛错——
+ * 抛错会让整条流程因为一个可选的优化而中断。
+ *
+ * @param ctx - 步骤上下文。
+ */
+async function safeCurrentPage(ctx: StepContext): Promise<string | null> {
+  try {
+    return await currentPage(ctx, pagesOf(ctx))
+  } catch {
+    return null
+  }
 }
 
 /** 构造某张图的运行时依赖。 */

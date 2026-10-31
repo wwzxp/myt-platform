@@ -14,6 +14,8 @@ import { createStepContext } from '@myt/flow'
 import type {} from '@myt/devices'
 import type {} from '@myt/runs'
 import type {} from '@myt/device-adb'
+import type {} from '@myt/model'
+import { createModelLocate } from '@myt/ui-decide'
 import { FlowTaskRunner } from './flow-task.ts'
 import type { FlowTaskDeps } from './flow-task.ts'
 
@@ -31,7 +33,7 @@ export interface TaskApiConfig {
  */
 export class TaskApi extends Service {
   /** 依赖：只有 Web 服务。 */
-  static inject = ['webServer', 'devices', 'runs', 'deviceControl']
+  static inject = ['webServer', 'devices', 'runs', 'deviceControl', 'modelControl']
 
   private readonly runner: FlowTaskRunner
 
@@ -45,7 +47,8 @@ export class TaskApi extends Service {
           deviceId,
           runId,
           app,
-          options: { abortSignal, params, yadbPath, model: undefined },
+          // 定位用本机模型：没有它只能走「兜底定位器」，intent 模式会失败。
+          options: { abortSignal, params, yadbPath, model: createModelLocate(ctx.modelControl) },
         }),
       pickDevice: (deviceId) => pickDevice(ctx.devices.list(), deviceId),
     }

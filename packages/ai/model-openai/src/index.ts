@@ -77,3 +77,10 @@ export class OpenAiModelControl extends ModelControl {
 export function installOpenAiModel(ctx: Context, config: OpenAiModelConfig = {}): OpenAiModelControl {
   return new OpenAiModelControl(ctx, config)
 }
+
+/**
+ * cordis 插件入口。
+ *
+ * profile 按 `name` 装配插件时读的是默认导出；构造函数即完成注册。
+ */
+export default OpenAiModelControl

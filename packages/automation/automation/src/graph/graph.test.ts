@@ -445,16 +445,20 @@ describe('validateFlowGraph — 加载校验', () => {
 })
 
 describe('动作节点 — 三种定位方式', () => {
-  /** 记录点击坐标的假设备。 */
+  /**
+   * 造一个会记录点击坐标的上下文。
+   *
+   * 在 `fakeCtx` 已有的假设备上只替换两个方法——不重造整个 `DeviceControl`
+   * （20+ 个方法），也不做强转。
+   */
   function tappingCtx(points: Array<{ x: number; y: number }>) {
-    return fakeCtx({
-      device: {
-        tapLikeHuman: async (_serial: string, x: number, y: number) => {
-          points.push({ x, y })
-        },
-        shell: async () => '',
-      },
-    })
+    const ctx = fakeCtx()
+    ctx.device.tapLikeHuman = async (_serial: string, x: number, y: number) => {
+      points.push({ x, y })
+    }
+    // 屏幕尺寸读不到时按 900x1600 兜底，ratio 用例依赖这个值。
+    ctx.device.shell = async () => ''
+    return ctx
   }
 
   /** 用真实输入键名造动作节点，绕过测试辅助的旧形状转换。 */

@@ -19,7 +19,9 @@
     "@myt/flow-xhs-login": "workspace:*",
     "@myt/flow-xhs-publish": "workspace:*",
     "@myt/xhs-login": "workspace:*",
-    "@myt/device-adb": "workspace:*"
+    "@myt/device-adb": "workspace:*",
+    "@myt/ui-decide": "workspace:*",
+    "@myt/model": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.5"

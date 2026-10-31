@@ -58,6 +58,10 @@
     - id: myt-api-v3
       name: '@myt/myt-api-v3'
 
+    # ── 本机模型（UI 定位：按文字描述在候选目标里挑一个）──
+    - id: model-openai
+      name: '@myt/model-openai'
+
     # ── 单机控制（adb）──
     - id: device-adb
       name: '@myt/device-adb'

@@ -28,6 +28,12 @@
     },
     {
       "path": "../../device/device-adb/tsconfig.host.json"
+    },
+    {
+      "path": "../../automation/ui-decide/tsconfig.host.json"
+    },
+    {
+      "path": "../../ai/model/tsconfig.host.json"
     }
   ]
 }

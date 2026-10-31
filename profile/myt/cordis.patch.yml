@@ -52,3 +52,15 @@
       name: '@deepseek-ai/dsh-host-frontend-static'
       config:
         distIndex: 'F:\ai\myt_tools\packages\client\app\dist\index.html'
+
+    # ── 单机控制（adb）──
+    - id: device-adb
+      name: '@myt/device-adb'
+
+    # ── 设备类 HTTP 接口（容器启停 / 设备清单 / 单机操作）──
+    - id: device-api
+      name: '@myt/device-api'
+
+    # ── 业务 HTTP 接口（短信平台等，不碰设备）──
+    - id: xhs-api
+      name: '@myt/xhs-api'

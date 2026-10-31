@@ -52,8 +52,6 @@ export interface PreStepDeps {
   stepFailed(runId: string, stepId: string, durationMs: number, kind: string, note: string): void
   /** 结束 run。 */
   finishRun(runId: string, status: 'succeeded' | 'failed', steps: number, error?: string): void
-  /** 代理池；没配则为 null。 */
-  proxyPool: ProxyPool | null
   /** yadb 路径。 */
   yadbPath: string
 }
@@ -72,6 +70,7 @@ export async function runPreStep(
   chain: ChainState,
   signal: AbortSignal,
   deps: PreStepDeps,
+  proxyPool: ProxyPool | null,
 ): Promise<boolean> {
   const device = deps.findDevice(chain.deviceId)
   if (!device) return false
@@ -121,7 +120,7 @@ export async function runPreStep(
 
   if (action === 'set-proxy') {
     // 代理在批调度前已由 ProxyPool 分配，这里只做接口调用。
-    const proxy = deps.proxyPool?.getForDevice(chain.deviceId)
+    const proxy = proxyPool?.getForDevice(chain.serial)
     if (!proxy) return finish(true, '未分配代理，跳过')
     try {
       const ok = await deps.setS5Proxy({

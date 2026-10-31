@@ -11,8 +11,7 @@ import { HeroSmsClient, loginWithHeroSms } from '@myt/flow-xhs'
 import { advanceChain, beginChain } from './tabs/login-chain.ts'
 import type { ChainState, ChainStep } from './tabs/login-chain.ts'
 import { hostIpOf, planIpBatches } from './tabs/job-scheduler.ts'
-import { requiredProxyCount } from './tabs/proxy-pool.ts'
-import type { ProxyPool } from './tabs/proxy-pool.ts'
+import { ProxyPool, requiredProxyCount } from './tabs/proxy-pool.ts'
 
 /** 编排依赖的服务；由 HTTP 插件从 `ctx` 取出来注入。 */
 export interface Deps {
@@ -27,6 +26,7 @@ export interface Deps {
     chain: ChainState,
     action: 'switch-container' | 'set-proxy' | 'reset-device',
     signal: AbortSignal,
+    proxyPool: ProxyPool | null,
   ): Promise<boolean>
   /** 解析流程 id 为可执行流程；未注册返回 null。 */
   resolveFlow(flowId: string, params: Record<string, string>): FlowDefinition | null
@@ -38,8 +38,6 @@ export interface Deps {
   yadbPath: string
   /** 记录一条编排层异常（没有对应 run 记录时用）。 */
   recordOrchestrationError(message: string): void
-  /** 代理池；没配则为 null。 */
-  proxyPool: ProxyPool | null
   /** 延迟调用（测试可替换成立即执行）。 */
   schedule(delayMs: number, fn: () => void): void
 }
@@ -116,6 +114,8 @@ export async function startBatchLogin(
     }
   }
 
+  // 代理池：勾了「登录前设置代理」才建。没勾就是 null，前置动作会跳过。
+  let proxyPool: ProxyPool | null = null
   if (flagIsOn('setProxyBeforeLogin')) {
     const proxies = Array.isArray(opts['proxies']) ? (opts['proxies'] as string[]) : []
     if (proxies.length === 0) {
@@ -126,6 +126,7 @@ export async function startBatchLogin(
     if (proxies.length < needed) {
       return { ok: false, status: 400, error: `代理不足：需要 ${needed} 个，只有 ${proxies.length} 个` }
     }
+    proxyPool = new ProxyPool(proxies, perIp)
   }
 
   const devices = deps.listDevices()
@@ -154,6 +155,8 @@ export async function startBatchLogin(
       },
       bindAccountIndex: -1,
     }
+    // 代理按设备序列号分配；池为 null 时跳过（未勾选）。
+    proxyPool?.acquire(row.serial)
     accepted.push({ deviceId: row.deviceId, serial: row.serial, switchNeeded })
     runnable.push({ row, chain })
   }
@@ -193,6 +196,7 @@ export async function startBatchLogin(
           chain,
           step.action as 'switch-container' | 'set-proxy' | 'reset-device',
           controller.signal,
+          proxyPool,
         )
         if (!ok) return
         step = advanceChain(recipe, chain, step.action)

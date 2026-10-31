@@ -320,7 +320,7 @@ export class LoginApi extends Service {
         },
         chainFlows: () => buildChainFlows(this.config.actions ?? []),
         yadbPath: this.config.yadbPath ?? 'yadb',
-        runPreStep: (chain, action, signal) =>
+        runPreStep: (chain, action, signal, pool) =>
           runPreStep(action, chain, signal, {
             findDevice: (deviceId) => this.ctx.devices.list().find((d) => d.deviceId === deviceId),
             startContainer: (hostIp, name, options) => this.ctx.mytHost.startContainer(hostIp, name, options),
@@ -344,14 +344,12 @@ export class LoginApi extends Service {
             stepSucceeded: (runId, stepId, ms, note) => this.ctx.runs.stepSucceeded(runId, stepId, ms, note),
             stepFailed: (runId, stepId, ms, kind, note) => this.ctx.runs.stepFailed(runId, stepId, ms, kind as 'precondition', note),
             finishRun: (runId, status, steps, error) => this.ctx.runs.finish(runId, status, steps, error),
-            proxyPool: null,
             yadbPath: this.config.yadbPath ?? 'yadb',
-          }),
+          }, pool),
         recordOrchestrationError: (msg) => {
           this.ctx.runs.start({ flowId: 'login-orchestration', deviceId: '', serial: '' })
           void msg
         },
-        proxyPool: null,
         schedule: (delayMs, fn) => setTimeout(fn, delayMs),
       },
       this.config.recipe ?? null,

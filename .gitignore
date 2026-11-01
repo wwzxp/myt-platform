@@ -38,3 +38,6 @@ packages/*/*/src/**/*.js
 packages/*/*/src/**/*.js.map
 packages/*/*/src/**/*.d.ts
 packages/*/*/src/**/*.d.ts.map
+# 手写的类型声明（不是构建产物）：必须入库
+!packages/client/app/src/type.d.ts
+!packages/*/*/src/**/types.d.ts

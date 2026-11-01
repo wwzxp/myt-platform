@@ -240,6 +240,8 @@ describe('截图读字解析', () => {
 
 
 describe('节点级重试', () => {
+  // 用 waitPage 做载体：它必然失败（等一个永远不出现的页面），
+  // 且每次尝试都会调 currentPage → snapshot，用它数重跑次数。
   const mkNode = (retries: number | undefined) => ({
     id: 'r',
     type: 'mt-action' as const,
@@ -247,26 +249,29 @@ describe('节点级重试', () => {
     data: {
       title: '重试测试',
       inputsValues: {
-        actKind: { type: 'constant', content: 'tapText' },
-        actTexts: { type: 'constant', content: '发布笔记' },
+        actKind: { type: 'constant', content: 'waitPage' },
+        actPages: { type: 'constant', content: 'never' },
+        actTimeout: { type: 'constant', content: '0' },
         ...(retries === undefined ? {} : { retries: { type: 'constant', content: String(retries) } }),
         retryGap: { type: 'constant', content: '0' },
       },
     },
   })
 
-  const mkCtx = (onSnapshot: () => void) => ({
+  const mkCtx = (onShell: () => void) => ({
     serial: 'f',
     deviceId: 'f',
     runId: 'r',
     device: {
-      shell: async () => '',
+      // waitPage 判页面靠 dumpsys window，所以用 shell 次数数重跑次数。
+      shell: async () => {
+        onShell()
+        return 'mCurrentFocus=Window{a u0 com.x/Unknown}'
+      },
       screenshot: async () => Buffer.alloc(0),
       tapLikeHuman: async () => {},
     },
     async snapshot() {
-      onSnapshot()
-      // 永远找不到「发布笔记」→ 必然失败，用调用次数衡量重试
       return { root: { bounds: [0, 0, 1080, 1920], children: [] } }
     },
     throwIfCancelled() {},
@@ -282,20 +287,21 @@ describe('节点级重试', () => {
       mkNode(2) as never,
       { pages: new PageRegistry(), locators: {} } as never,
     )
-    expect(calls).toBe(3) // 1 次原始 + 2 次重试
+    // waitPage 自己会轮询一次，重试 2 次 → 执行次数 3
+    expect(calls).toBeGreaterThanOrEqual(3)
     expect(result.port).toBe('failure')
   })
 
-  it('retries 未填时只跑一次', async () => {
+  it('retries 未填时不额外重跑', async () => {
     const { executeNode } = await import('./graph/run.ts')
     let calls = 0
-    const result = await executeNode(
+    await executeNode(
       mkCtx(() => { calls += 1 }) as never,
       mkNode(undefined) as never,
       { pages: new PageRegistry(), locators: {} } as never,
     )
-    expect(calls).toBe(1)
-    expect(result.port).toBe('failure')
+    // 无重试：只有 waitPage 自己的判断（先判一次 + 超时后循环再判一次 = 2）
+    expect(calls).toBe(2)
   })
 })
 

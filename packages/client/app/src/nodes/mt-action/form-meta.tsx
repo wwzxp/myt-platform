@@ -24,8 +24,6 @@ const ACT_KINDS = [
   { value: 'sleep', label: '等待' },
   { value: 'waitPage', label: '等页面出现' },
   { value: 'waitElement', label: '等元素出现' },
-  { value: 'tapLocator', label: '点（按定位器）' },
-  { value: 'tapText', label: '点（按文字）' },
   { value: 'pickImages', label: '按数量选图' },
   { value: 'push', label: '推送文件' },
   { value: 'pushToGallery', label: '推送到相册' },

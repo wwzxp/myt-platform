@@ -478,18 +478,6 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
     return { port: 'success' }
   }
 
-  // 点第一个命中的文字：给一组候选文案，找到哪个点哪个（全部没有则失败）。
-  if (kind === 'tapText') {
-    const texts = listInput(inputs, 'actTexts')
-    if (texts.length === 0) return { port: 'failure', reason: `动作节点「${title}」没有填要点的文字` }
-    const snapshot = await ctx.snapshot({ refresh: true })
-    const point = findTextPoint(snapshot.root, texts)
-    if (!point) return { port: 'failure', reason: `界面上没有这些文字：${texts.join('/')}` }
-    await tapHuman(ctx, point)
-    if (settle) await sleepRandom(ctx, settle[0], settle[1])
-    return { port: 'success' }
-  }
-
   // 按数量选图：数已选中的图，不够就点下一张，滚到底还差就失败。
   // 算法留在通用引擎里，业务只给「要选几张」。
   if (kind === 'pickImages') {

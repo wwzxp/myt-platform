@@ -478,20 +478,6 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
     return { port: 'success' }
   }
 
-  // 点定位器指向的元素：参数是**定位器名**（业务包注册），不是写死坐标。
-  // 这样「点发布按钮」「点保存草稿」都是原语，业务只提供「按钮在哪」。
-  if (kind === 'tapLocator') {
-    const name = strInput(inputs, 'actLocator')
-    const locator = runtime.locators[name]
-    if (!locator) return { port: 'failure', reason: `未注册定位器：${name}` }
-    const snapshot = await ctx.snapshot({ refresh: true })
-    const point = locator(snapshot.root)
-    if (!point) return { port: 'failure', reason: `定位器「${name}」在当前界面找不到目标` }
-    await tapHuman(ctx, point)
-    if (settle) await sleepRandom(ctx, settle[0], settle[1])
-    return { port: 'success' }
-  }
-
   // 点第一个命中的文字：给一组候选文案，找到哪个点哪个（全部没有则失败）。
   if (kind === 'tapText') {
     const texts = listInput(inputs, 'actTexts')

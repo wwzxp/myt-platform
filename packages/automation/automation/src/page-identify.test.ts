@@ -240,79 +240,60 @@ describe('截图读字解析', () => {
 
 
 describe('节点级重试', () => {
-  it('failure 会按 retries 重跑，成功即停', async () => {
-    const { executeNode } = await import('./graph/run.ts')
-    let calls = 0
-    // 用一个必然失败的动作（定位器不存在），但让它在第 2 次成功。
-    const node = {
-      id: 'r',
-      type: 'mt-action' as const,
-      meta: { position: { x: 0, y: 0 } },
-      data: {
-        title: '重试测试',
-        inputsValues: {
-          actKind: { type: 'constant', content: 'tapLocator' },
-          actLocator: { type: 'constant', content: 'flaky' },
-          retries: { type: 'constant', content: '2' },
-          retryGap: { type: 'constant', content: '0' },
-        },
+  const mkNode = (retries: number | undefined) => ({
+    id: 'r',
+    type: 'mt-action' as const,
+    meta: { position: { x: 0, y: 0 } },
+    data: {
+      title: '重试测试',
+      inputsValues: {
+        actKind: { type: 'constant', content: 'tapText' },
+        actTexts: { type: 'constant', content: '发布笔记' },
+        ...(retries === undefined ? {} : { retries: { type: 'constant', content: String(retries) } }),
+        retryGap: { type: 'constant', content: '0' },
       },
-    }
-    const ctx = {
-      serial: 'f', deviceId: 'f', runId: 'r',
-      device: {
-        shell: async () => '',
-        screenshot: async () => Buffer.alloc(0),
-        tapLikeHuman: async () => {},
-      },
-      async snapshot() {
-        return { root: { bounds: [0, 0, 1080, 1920], children: [] } }
-      },
-      throwIfCancelled() {},
-      flowParams: {},
-      random: { next: () => 0.5 },
-    }
-    const runtime = {
-      pages: new PageRegistry(),
-      locators: {
-        flaky: () => {
-          calls += 1
-          return calls >= 2 ? { x: 10, y: 10 } : null
-        },
-      },
-    } as never
-    const result = await executeNode(ctx as never, node as never, runtime)
-    expect(calls).toBe(2)
-    expect(result.port).toBe('success')
+    },
   })
 
-  it('retries=0 时只跑一次', async () => {
+  const mkCtx = (onSnapshot: () => void) => ({
+    serial: 'f',
+    deviceId: 'f',
+    runId: 'r',
+    device: {
+      shell: async () => '',
+      screenshot: async () => Buffer.alloc(0),
+      tapLikeHuman: async () => {},
+    },
+    async snapshot() {
+      onSnapshot()
+      // 永远找不到「发布笔记」→ 必然失败，用调用次数衡量重试
+      return { root: { bounds: [0, 0, 1080, 1920], children: [] } }
+    },
+    throwIfCancelled() {},
+    flowParams: {},
+    random: { next: () => 0.5 },
+  })
+
+  it('failure 会按 retries 重跑', async () => {
     const { executeNode } = await import('./graph/run.ts')
     let calls = 0
-    const node = {
-      id: 'r0',
-      type: 'mt-action' as const,
-      meta: { position: { x: 0, y: 0 } },
-      data: {
-        title: '不重试',
-        inputsValues: {
-          actKind: { type: 'constant', content: 'tapLocator' },
-          actLocator: { type: 'constant', content: 'never' },
-        },
-      },
-    }
-    const ctx = {
-      serial: 'f', deviceId: 'f', runId: 'r',
-      device: { shell: async () => '', screenshot: async () => Buffer.alloc(0) },
-      async snapshot() { return { root: { bounds: [0, 0, 1080, 1920], children: [] } } },
-      throwIfCancelled() {},
-      flowParams: {},
-    }
-    const runtime = {
-      pages: new PageRegistry(),
-      locators: { never: () => { calls += 1; return null } },
-    } as never
-    const result = await executeNode(ctx as never, node as never, runtime)
+    const result = await executeNode(
+      mkCtx(() => { calls += 1 }) as never,
+      mkNode(2) as never,
+      { pages: new PageRegistry(), locators: {} } as never,
+    )
+    expect(calls).toBe(3) // 1 次原始 + 2 次重试
+    expect(result.port).toBe('failure')
+  })
+
+  it('retries 未填时只跑一次', async () => {
+    const { executeNode } = await import('./graph/run.ts')
+    let calls = 0
+    const result = await executeNode(
+      mkCtx(() => { calls += 1 }) as never,
+      mkNode(undefined) as never,
+      { pages: new PageRegistry(), locators: {} } as never,
+    )
     expect(calls).toBe(1)
     expect(result.port).toBe('failure')
   })

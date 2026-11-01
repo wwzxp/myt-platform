@@ -105,6 +105,7 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-02 01:10:27 | 删除 | 「点（按定位器）」`tapLocator` | 定位器名对用户是黑盒、背后是写死的节点路径，App 改版即失效且难排查。引擎删除该分支；三个模板的「点发布/存草稿」改为 `tapText`（文案 `发布笔记,存草稿`）；重试用例改用 `tapText`。画布上已无「按定位器」入口 |
 | 2026-11-02 00:56:21 | 删除 | 「状态约束 / 控件类型」（全链路） | 按「只能用关键词判断页面、不做 tab 特例」移除：`PageSpec.keywordStates`/`widgetClass`、`KeywordState`/`KeywordNode`、`resolveByKeywordNodes`、`hasKeywordStates`、currentPage 的节点级分支、页面表两个下拉、采集自动建议、两组测试。保留通用的 `PageSpec.attributes`（引擎级，界面不暴露） |
 | 2026-11-02 00:45:09 | 新增 | `form-components/page-select` `PageMultiSelect` | 把条件节点的页面多选抽成公共组件（内部订 `onListOrAnyVarChange`，页面表改了选项立刻更新）；动作节点「等哪些页面」「前置页面」改用它，不再手填 id |
 | 2026-11-02 00:35:55 | 新增 | 节点级 `retries` / `retryGap` / `settle` | 重试实现放在 `executeNode` 入口，所有节点类型通用（failure/mismatch 前自动重跑、重试前 invalidateSnapshot）；前端加「失败重试次数」「重试间隔（秒）」字段；三个模板按节点补 settle 与 retries（等相册 2×2s、点发布 2×2s、校验 2×3s 等） |

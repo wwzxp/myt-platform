@@ -5,10 +5,12 @@
   "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "node --import tsx packages/app/desktop-host/src/host.ts",
+    "dev:canvas": "node scripts/dev-canvas.mjs",
     "dev:desktop": "pnpm build:host && pnpm --filter myt-desktop start",
     "dist": "pnpm build:host && pnpm --filter myt-desktop dist",
     "typecheck": "tsc --noEmit",
-    "build:host": "pnpm --filter @myt/desktop-host build"
+    "build:host": "pnpm --filter @myt/desktop-host build",
+    "smoke:dist": "tsx scripts/smoke-packaged-app.ts"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",

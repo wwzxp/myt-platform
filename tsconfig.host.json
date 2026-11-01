@@ -60,9 +60,6 @@
       "path": "./packages/api/workspace-files/tsconfig.host.json"
     },
     {
-      "path": "./packages/app/kernel/tsconfig.host.json"
-    },
-    {
       "path": "./packages/attachment/attachment"
     },
     {

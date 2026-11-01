@@ -3,6 +3,24 @@
 - 状态：提案。以下为推荐默认值，标注「假设」的条目未经用户确认
 - 依据：ADR-0001/0002、`docs/spec/shared-steps.md`、`docs/spec/ui-information-architecture.md`
 
+## 0. 实施状态
+
+| 章节 | 状态 | 落点 |
+|---|---|---|
+| §1 事件日志 / §2 事件模型 / §3 投影 / §5 事件保留期 | **已实现** | `packages/core/runs/src/event-log.ts`（SQLite WAL，表 `events`）、`index.ts`（投影重建 + 崩溃恢复） |
+| §1 业务表其余表（`hosts`/`slots`/`devices`/`accounts`/`bindings`/`runs`） | 未实现 | 仍走各自服务的内存态 |
+| §4 产物存储 | 未实现 | 截图/dump 尚未落文件系统 |
+| §6 分发与更新 | 未实现 | — |
+
+已实现部分的细节（与本文其余章节一致，仅补充落地形式）：
+
+- 追加即落库：`RunStore.append` 同步写 `events` 表；库未打开前先进内存队列，打开后按序补写。
+- `seq` 在单 run 内从 0 单调递增，由 `EventLog` 维护（重启后从 `MAX(seq)+1` 续）。
+- 写入前对 payload 递归脱敏（键名含 password/sid/token/cardKey/apiKey/cookie/credential 等即替换为 `[redacted]`）。
+- 启动时 `loadAll()` 重建投影；库里仍为 `running` 的运行改标 `interrupted` 并补写一条 `run/finished`，**不自动续跑**。
+- `dbPath` 不配则保持纯内存，行为与接入前一致（测试与 `:memory:` 场景）。
+- 事件表句柄用 `createRequire` 加载 `node:sqlite`：vitest 的解析器会把 `node:sqlite` 剥成 `sqlite` 再去找包并失败。
+
 ## 1. 数据平面
 
 | 平面 | 存什么 | 介质 | 生命周期 |

@@ -75,7 +75,7 @@
 | `@myt/device` | 设备能力接缝：`UiNode`/`UiSnapshot`/`DeviceControl`；`ctx.deviceControl` | `connect`、`dumpUi`、`tap`、`swipe`、`typeText`、`back`、`screenshot`、`openUri`、`forceStop` |
 | `@myt/device-adb` | ADB 直连 Provider；uiautomator XML 自解析；`dumpUi` 空内容重试 3 次后抛错 | 注册 `ctx.deviceControl` |
 | `@myt/locator` | 定位器：`id > text > desc > class > path`，支持 fallbacks，返回命中策略用于记录兜底 | `locate()`、`find()`、`center()`、`describe()` |
-| `@myt/runs` | 运行事件流：8 类事件、5 类错误、checkpoint 推导、中断标记、内存保留上限 | `ctx.runs.start/step*/finish/completedSteps/markInterrupted` |
+| `@myt/runs` | 运行事件流：8 类事件、5 类错误、checkpoint 推导、中断标记、内存保留上限；**事件落 SQLite（WAL，表 `events`，只追加，默认保留 90 天，写入前脱敏），重启从表重建投影** | `ctx.runs.start/step*/finish/completedSteps/markInterrupted/whenReady/exportJsonl/prune` |
 | `@myt/flow` | 流程引擎：步骤可跳过/重试/分类；`transient`+`wrong-page` 才重试；记录 locator 兜底 | `ctx.flows.register/list`、`FlowRunner.run` |
 | `@myt/human` | 拟人化：`humanClickPoint`（高斯偏移+边界约束）、`pressDuration`（70/20/10 加权）、`nextTapGap`、`splitBursts`、可复现 `Random`（xorshift32） | 供设备层与流程复用 |
 | `@myt/flow-xhs` | 小红书流程与定位：`locators`（12 个定位函数）、`state-locators`（区号列表/重发/聚焦/转圈/安全验证）、`dialogs`（5 个弹窗）、`actions`（输入/清空/等转圈/连点）；流程 `xhs.probe`、`xhs.login.phone-prep`（11 步） | 注册到 `ctx.flows` |
@@ -105,6 +105,122 @@
 
 | 时间 | 类型 | 文件/模块 | 说明 |
 |------|------|-----------|------|
+| 2026-11-02 00:56:21 | 删除 | 「状态约束 / 控件类型」（全链路） | 按「只能用关键词判断页面、不做 tab 特例」移除：`PageSpec.keywordStates`/`widgetClass`、`KeywordState`/`KeywordNode`、`resolveByKeywordNodes`、`hasKeywordStates`、currentPage 的节点级分支、页面表两个下拉、采集自动建议、两组测试。保留通用的 `PageSpec.attributes`（引擎级，界面不暴露） |
+| 2026-11-02 00:45:09 | 新增 | `form-components/page-select` `PageMultiSelect` | 把条件节点的页面多选抽成公共组件（内部订 `onListOrAnyVarChange`，页面表改了选项立刻更新）；动作节点「等哪些页面」「前置页面」改用它，不再手填 id |
+| 2026-11-02 00:35:55 | 新增 | 节点级 `retries` / `retryGap` / `settle` | 重试实现放在 `executeNode` 入口，所有节点类型通用（failure/mismatch 前自动重跑、重试前 invalidateSnapshot）；前端加「失败重试次数」「重试间隔（秒）」字段；三个模板按节点补 settle 与 retries（等相册 2×2s、点发布 2×2s、校验 2×3s 等） |
+| 2026-11-02 00:31:32 | 新增 | 3 个动作原语 | `tapLocator`（点定位器名指向的位置）、`tapText`（按候选文案找点）、`pickImages`（按数量选图：数选中数+逐个点+滚动补选，算法在引擎，业务只提供 `runtime.gallery` 图片格识别） |
+| 2026-11-02 00:31:32 | 修改 | `data/workflows/*.json` | 11 个 `custom` 节点全部拆成原语：waitGallery→3 节点、pickImages→1、submitNote→1、verifyPublished→3、openThoughtPage→1、saveArticleDraft→3；custom 清零，悬空边 0、自环 0 |
+| 2026-11-02 00:23:54 | 新增 | 动作原语「等页面出现」「等元素出现」 | `waitPage`（轮询 currentPage，超时走 failure 端口）/ `waitElement`（轮询定位），补上重试所需的等待原语 |
+| 2026-11-02 00:23:54 | 删除 | 自定义动作（`actKind='custom'`） | 引擎分支、前端下拉与表单、业务包 `XHS_ACTIONS` 全部移除；模板 11 个 custom 节点中「打开发布页并等相册」已拆成 跳个人页→打开发布页→等相册出现 三步 |
+| 2026-11-01 19:26:02 | 新增 | `PageSpec.widgetClass` + 控件类型下拉 | 关键词所在节点的控件类型（`class` 包含即算），界面给中文选项（标签页/按钮/图片/文本/输入框/勾选框/容器），存类名片段如 `Tab` |
+| 2026-11-01 19:26:02 | 新增 | 采集 `hints` + 自动建议 | 采集返回每词的「是否在选中节点上」「控件类型」；前端据此自动设 `keywordStates` / `widgetClass` |
+| 2026-11-01 19:26:02 | bug修复 | `WorkflowStore.load` 按 mtime 失效 | 之前只在启动时读盘，改 JSON 必须重启；现在文件变了就重读，实测免重启生效 |
+| 2026-11-01 19:26:02 | 删除 | 文档里的 L3「模型兜底」 | 代码里没有实现、也没有测试，按约定从文档删除 |
+| 2026-11-01 19:26:02 | 验证 | 真机 OCR 分辨率 | XML 48 条→home ✅；OCR 50% 29 条→unknown（漏顶部小字）；**OCR 75% 32 条→home ✅**（13.8s） |
+| 2026-11-01 19:17:12 | bug修复 | `runs-api` 装配 `align` | 之前只传了 `alignModel`/`vision`，**没传对齐表**——跨语言翻译在运行时永远不触发（英文界面直接 unknown）。改为构造时创建 `AlignCache`（落 `MYT_DATA_DIR/align-zh.json`）并注入 |
+| 2026-11-01 19:17:12 | 新增 | `page-identify.test.ts` 整合测试 | +5 个 `currentPage` 用例：Activity 直判、中文关键词、英文经对齐表、无表判不出、状态约束；共 33 个 |
+| 2026-11-01 19:14:12 | 新增 | 关键词 + 节点状态约束 | `PageSpec.keywordStates`：命中关键词的节点还须满足状态（选中/勾选/聚焦/可点击/已启用/可滚动）。关键词判定升级为**节点级** `resolveByKeywordNodes`；页面表加中文下拉「状态约束」（不暴露 XML 属性名）。实测：RED 存在但未选中 → unknown；标为选中 → 命中 |
+| 2026-11-01 19:07:07 | 新增 | `PageSpec.attributes` + `resolveByAttributes` | **通用属性匹配**：按 XML 属性判定页面（组内 AND、组间 OR、`~` 前缀表示包含、条件多的优先）。`currentPage` 里排在 Activity 之后、contentMarkers 之前；属性值也会经对齐表翻译后再匹配。真实 XML 验证：中文原文命中、英文经 `Explore=发现` 后命中 |
+| 2026-11-01 19:04:07 | 删除 | tab 关键词概念（全链路） | 按「通用工具、只用关键词判页面」的要求移除：`PageSpec.tabKeywords`、`resolveBySelectedTab`、`hasTabKeywords`、`currentPage` 的选中态分支与 selected 收集、页面表 tab 输入框、模板 `tabKeywords` 字段、对应测试与文档。同 Activity 不同 tab 视为同一页面 |
+| 2026-11-01 19:00:19 | 优化 | `page-guard.ts` 判定改为加权 | 权重=词长，最低分 3（约「一个 3 字词」或「两个 2 字词」），同分 unknown；单个 2 字词不再单独成立 |
+| 2026-11-01 19:00:19 | 优化 | 页面表采集体验 | 按钮 loading（采集中/禁用其他行）+ 覆盖前弹窗对照新旧词 |
+| 2026-11-01 19:00:19 | 删除 | `keyword-align.ts` `looksChinese` | 已无人调用的死代码（语言判断改为「先原文、不中再翻译」） |
+| 2026-11-01 19:00:19 | 新增 | `packages/automation/automation/src/page-identify.test.ts` | 20 个常驻测试：加权判定/选中态/关键词采集/对齐解析/OCR 解析 |
+| 2026-11-01 18:52:52 | bug修复 | `client/app/.../page-table-editor.tsx` | 页面表编辑**原本完全不落盘**：自动保存只挂 `onContentChange`，改全局变量不触发；且 `workflow.save()` 存的是加载时快照、被幂等检查跳过。改为在 `commit` 后用 `document.toJSON() + 新 schema` 直接 `saveWorkflow`（防抖 800ms）。实测改关键词 5 秒后文件更新 |
+| 2026-11-01 18:46:25 | 验证 | 采集全链路（真机 127.0.0.1:5565） | `POST /api/pages/collect` 返回 `推荐/热点/直播/短剧/足球/美甲/彩妆/菜单`，采样 50/53/45 条；界面填序列号点「采集」约 10 秒后回填 input ✅。面板新增手填序列号（localStorage），不依赖宿主容器 |
+| 2026-11-01 18:46:25 | bug修复 | `tsconfig.host.json` / 构建流程 | 去掉指向不存在的 `packages/app/kernel` 的悬空引用；确认内核跑 `lib/index.js`（tsdown 产物），改路由后必须 `tsc -b tsconfig.host.json` + `tsdown` 才生效（否则新路由被 `/api` 准入层截成 401） |
+| 2026-11-01 18:37:53 | 修改 | `client/app/.../page-table-editor.tsx` | 每行新增「tab 关键词」输入框（写进 `pages[].tabKeywords`，用于同 Activity 靠 `selected` 区分的页面）；说明文案补一句 |
+| 2026-11-01 18:35:57 | 新增 | `POST /api/pages/collect`（runs-api） | 采集接口：`{serial,pageId,samples?}` → 抓 N 次（每次滚半屏）→ `collectKeywords` 统计 → 返回 `{keywords,sampleSizes,warning?}`；runs-api 新增 `@myt/automation` 依赖与项目引用 |
+| 2026-11-01 18:35:57 | 新增 | `client/app/src/services/page-collect-api.ts` + 页面表「采集」按钮 | 点击 → 查 `/api/hosts` → 取第一台运行中设备 → 调采集接口 → 回填关键词；宿主机为空/无设备/0 词分别给不同提示 |
+| 2026-11-01 18:25:02 | 修改 | `client/app/.../page-table-editor.tsx` | 页面表每行新增「界面关键词」输入框（逗号分隔，写进 `pages[].keywords`）；说明文案改 `<b>`（JSX 里 `**` 会原样显示） |
+| 2026-11-01 18:25:02 | 修改 | `data/workflows/*.json` | 三个模板补齐 `keywords`（10/12 页）与 `home.tabKeywords`；内核启动时缓存流程，改后需重启 dev:canvas |
+| 2026-11-01 18:20:44 | 新增 | `packages/automation/automation/src/keyword-collect.ts` | 关键词自动采集（方案 C）：`collectKeywords` 按「出现率 ≥80% + 跨页去重 + 长度/纯数字过滤」统计每页独有词；`assessCollection` 判断可信度（0 词提示改用 Activity/视觉） |
+| 2026-11-01 18:20:44 | 新增 | `packages/flow/flow-xhs-publish/src/collect.ts` | `collectPageKeywords(ctx, pageId)`：设备侧采样（每次滚动半屏再抓）+ 统计，供未来「采集当前页面」按钮调用 |
+| 2026-11-01 18:18:18 | 修改 | `packages/core/flow` `StepContext.pageIdentify` | 新增结构性类型 `PageIdentifyOptions{align,alignModel,vision}`（flow 不能反向 import automation），RunOptions 透传到 ctx |
+| 2026-11-01 18:18:18 | 修改 | `packages/core/runs-api` | 从 `modelControl` 自动装配：`alignModel` 走 `complete()`，`vision` 仅在 provider 实现 `completeWithImage` 时提供（探测缺失则跳过） |
+| 2026-11-01 18:18:18 | bug修复 | `page-guard.ts` | 截图读字分支原先放在 `if (!align) return` 之后，没传对齐表时**永不触发**；已前移，并补上漏掉的 `await device.screenshot()` |
+| 2026-11-01 18:16:00 | 新增 | `packages/automation/automation/src/screen-ocr.ts` | 截图读字：`OCR_PROMPT`（完整列出/不编号/不要求计数）、`parseOcrText`（剥离 `1.`/`-`/`•`/`**`，丢弃 >40 字正文行）、`readScreenText`（模型失败返回空数组不抛错） |
+| 2026-11-01 18:16:00 | 新增 | `packages/ai/model-openai` `completeWithImage()` | OpenAI 多模态 content 数组（text + image_url data URL），与 `complete()` 分离 |
+| 2026-11-01 18:16:00 | 修改 | `page-guard.ts` | `currentPage` 支持 `CurrentPageOptions{align,model,vision}`（兼容老签名）；文字 <3 条时触发截图读字，读到的字先原文匹配再查对齐表 |
+| 2026-11-01 18:13:59 | 新增 | `page-guard.ts` `PageSpec.tabKeywords` + `resolveBySelectedTab` | 同 Activity 多 tab（推荐/RED/热点）只能靠 `selected` 区分：收集 `selected`/`checked` 节点的标签，按 tab 关键词判定，多个命中取最长；`currentPage` 里选中态优先，且非中文界面先原文、再查对齐表 |
+| 2026-11-01 18:11:54 | 新增 | `packages/automation/automation/src/keyword-align-store.ts` | `AlignCache`：只把**表里没有**的词送模型、结果合并并落盘，二次命中不再调用；`loadAlignTable` 容错读（坏文件返回空表）、`saveAlignTable` 排序写 |
+| 2026-11-01 18:11:54 | 修改 | `packages/automation/automation/src/page-guard.ts` | `currentPage` 支持 `AlignSource`（静态表或缓存）+ 可选模型：原文→已有表→**自动补表**→unknown，模型不可用时降级不报错 |
+| 2026-11-01 18:09:01 | 修改 | `packages/automation/automation/src/page-guard.ts` | `currentPage` 接入关键词判定：contentMarkers → 关键词（**先原文匹配，不中再查对齐表翻译后匹配**）。踩坑：按字符占比判语言会被中文正文污染（英文 XML 里混着帖子文案 → 误判成中文、跳过翻译），故不做语言判断 |
+| 2026-11-01 18:09:01 | 修改 | `packages/flow/flow-xhs-publish/src/pages.ts` | 11 个页面补 `keywords`（中文独有词）；`image-editor` 刻意不含「文字」这类两字泛词 |
+| 2026-11-01 18:02:05 | 新增 | `packages/automation/automation/src/keyword-align.ts` | 跨语言关键词对齐：`buildAlignPrompt`（约束成「英文=中文」，不给推理空间）/ `parseAlignTable`（容错解析）/ `translateTerms`（查表译中文）/ `looksChinese`（判断要不要查表） |
+| 2026-11-01 18:02:05 | 修改 | `packages/automation/automation/src/page-guard.ts` | `PageSpec` 新增 `keywords`；`PageRegistry` 新增 `hasKeywords`/`allKeywords`/`resolveByKeywords`（命中数最多且领先才判，打平→unknown）。修一个实测 bug：拼接后 `includes` 会让正文「随便什么文字」命中关键词「文字」，改为逐条比对 + 关键词须占该条一半以上 |
+| 2026-11-01 18:02:05 | 修改 | `packages/automation/automation/src/index.ts` | 导出对齐模块 |
+| 2026-11-01 17:36:33 | 新增 | `docs/spec/page-identify-design.md` | **页面识别方案定稿**：L1（Activity + XML/中英文关键词）→ L2（截图 50% → 4.6 读字 → 同套关键词）→ L3（模型兜底）→ unknown；含选词规范、已知边界（同 tab 只能靠 XML `selected`）、运行参数与待办 |
+| 2026-11-01 15:37:36 | 验证 | 35B-A3B 双图判断 | 两张同框架、仅内容不同的首页截图：35B 答「结构相同 / 内容不同 / 同一页面类型」**全对**，耗时 **126.9s**。判断力够、速度不行。也印证同布局不同内容不该判成两页 |
+| 2026-11-01 15:26:59 | 验证 | L2 可纯关键词 | 用三段真实 OCR 结果验证：`L1 视觉读字 → 关键词容错匹配` 直接 **3/3**（图片编辑/图片预览/相册），不必调文本模型。模型只在匹配不出或有歧义时兜底（0.5–1.2s） |
+| 2026-11-01 15:24:51 | 验证 | 读字→判断两段式 | 按"像人一样"改成 `视觉读字 → 文本判断`：3 个难例（图片编辑/图片预览/相册）**全判对**，而"直接选页面"在相似页全错。分辨率：50% ≈7s（个别错字）、**75% 14.7s 全对**、100% 18.8s 无额外收益。前提：候选描述容错（写成「成片」「裁切/切割」）+ 判断词声明允许 OCR 错字 |
+| 2026-11-01 15:19:31 | 验证 | 视觉模型识读能力 | 直接问「列出截图所有文字」：30% 只能读大号字（关注/发现/同城/市集/我），工具栏小字糊成乱码；50% 可读工具栏（滤镜/文字/贴纸/切割/标记/调节/拼图）。会错字（一键成片→一步成片、草稿箱→算辑箱），正文噪声多。结论：让它**读字**再用关键词容错匹配，比让它"选页面"可靠 |
+| 2026-11-01 14:48:36 | 更正 | 视觉模型选型 | 补测相似页后推翻上一条的"4.6 可作兜底"：`image-editor`/`review`/`preview` 三页外观相近，4.6 **0/2**（都判 preview），35B **2/2**（26–37s）。选型取决于候选外观差异：差异大→4.6（2.5s），相近→35B 或 unknown |
+| 2026-11-01 14:45:29 | 优化 | 视觉兜底换模型 | 35B 的 14s 已是本机下限（暖机 27–29 tok/s，CPU 带宽瓶颈；`--image-max-tokens` 对该投影层无效）。改 **MiniCPM-V 4.6**（0.53+1.11GB）：同样参数/3 候选/图 30% → **2.5s，3/3 正确**，比 35B 快 5.6 倍。12 候选时不预筛会误判，预筛为硬前提 |
+| 2026-11-01 14:38:26 | 优化 | 35B-A3B 视觉调优 | 186s → **14.2s**（13 倍）：`-t 12 -ub 1024 -fa on -c 2048` + 候选预筛到 3 个 + 图片 30%；同图重复命中 prompt 缓存仅 **0.6s**。耗时全在 prompt（生成 0.2s）。已写入 `docs/reference/local-model-runbook.md` 步骤 3.5 与 `docs/spec/page-identify-experiment.md` |
+| 2026-11-01 14:31:28 | 新增 | `docs/reference/local-model-runbook.md` | **本地大模型启动手册**：前置检查 → 6 步 SOP（含验证点）→ 12 条错误速查表 → 勿试清单 → 决策点/回退 → 验证清单 → 耗时预算。把 35B-A3B 视觉那一轮的试错固化下来 |
+| 2026-11-01 14:16:44 | 验证 | 35B-A3B 视觉 | 找到根因：ollama 在 CPU 模式下**主动禁用 mmap**（`disabling mmap ... reason=cpu`，并强传 `--load-mode none`），才要 19.88GB。改用 ollama 自带的 `lib/ollama/llama-server.exe` + `--load-mode mmap -nr`，配 35B 投影层 `mmproj-model-f16-4x.gguf`（dim=2048，从 openbmb 仓库下载 868MiB）→ **加载成功、判对 album**，但 186s/次；私有内存 2.15GB（印证"3GB 就能跑"） |
+| 2026-11-01 13:46:29 | 验证 | 35B-A3B 视觉（ollama `m35vl`） | 新建 `manifests-v2/.../m35vl/latest`（+projector 层，零拷贝），ollama 报 `capabilities` 含 vision ✅；但加载失败：`load_mode = none` → 需 19.88GB 连续内存，本机空闲仅 ~13.5GB。llama.cpp b11985/b12024 均不含 `minicpmv4_7`，无法替代 |
+| 2026-11-01 13:47:00 | 更正 | `docs/spec/page-identify-experiment.md` | 更正上一条错误结论：35B-A3B **有视觉**（GGUF `general.name=35a3_hf_v47_0923`，投影层 `blobs/sha256-1e0ab4398…`，`projector_type=minicpmv4_7`）；只是 ollama 的 `m35` 封装没挂投影层。本机 llama.cpp 0.8.0-dev 的 `mtmd.dll` 只有 `minicpmv4_6`、没有 `minicpmv4_7`，**挂不上**，视觉未测 |
+| 2026-11-01 13:39:26 | 验证 | 35B-A3B（llama.cpp `-nr`，仅文本） | 文字判页面：35B 59,516ms 对 1 例，minicpm46 173ms 对同一例——**准确率相同、速度差 344 倍**。慢因：19.89GB 模型只驻留 1.47GB、可用内存 0.4GB，全在换页（1.95 tok/s）。注：当次未挂投影层，只测了文本 |
+| 2026-11-01 13:29:29 | 新增 | `docs/spec/page-identify-experiment.md` | 页面识别可行性实测：文字描述 → XML 比对可行（2.3s，78% 明确胜出）；截图 → minicpm46 闭集分类**不可行**（12 候选 1/4、3 候选 0/2、参考图 1v1 假阳性） |
+| 2026-11-01 13:29:29 | 验证 | `.tmp/page-identify-20261101_132519.mjs` `.tmp/page-pair-20261101_133500.mjs` | 一次性验证脚本（带时间戳，只读设备）。结论已写入上面的文档 |
+| 2026-11-01 13:19:13 | 修改 | `client/app/src/plugins/variable-panel-plugin/components/page-table-editor.tsx` | 「新增页面」不再弹 prompt：点一下直接追加空行、光标落在 id 框，就地输入；按钮常驻列表上方，列表在 460px 上限内独立滚动（`focus({preventScroll})` 避免把面板滚走）；id 重复改为就地拦截 |
+| 2026-11-01 13:19:13 | bug修复 | `client/app/src/plugins/variable-panel-plugin/components/page-table-editor.tsx` | `commit` 后主动 `refresh()`：原先只订「变量列表增删」，写回后 DOM 不更新（数据已进 schema、界面还是旧值） |
+| 2026-11-01 13:19:13 | 修改 | `client/app/src/nodes/mt-condition/form-meta.tsx` | 下拉忽略 id 为空的行（新增的空行不进入选项） |
+| 2026-11-01 13:19:13 | 验证 | 页面表新增 | ego 实测：12 → 13 行、光标在 id 框、直接敲出 `settings`；模板文件 md5 未变（画布不自动写盘） |
+| 2026-11-01 11:41:05 | bug修复 | `client/app/src/nodes/mt-condition/form-meta.tsx` | 条件节点订阅 `globalScope.output.onListOrAnyVarChange`：页面表改了，节点上的页面下拉与标签**实时**刷新（原先要重载才生效） |
+| 2026-11-01 11:41:05 | bug修复 | `client/app/src/plugins/variable-panel-plugin/components/page-table-editor.tsx` | 页面列表加独立滚动容器（`maxHeight:58vh`）；原先 12 行溢出面板，底部几行被画布滚动条盖住、点不到 |
+| 2026-11-01 11:41:05 | 验证 | 页面表写回 | 改中文名 → 全局变量 `app.default.pages` 更新 → 条件节点实时显示「主页（home）」，还原回「首页（home）」；`tsc` 0 错误、构建通过 |
+| 2026-11-01 11:23:29 | 修改 | `client/app/src/form-components/form-item/index.tsx` | `FormItem` 新增 `title`：长解释放**标签悬浮提示**（光标变成 help），不再在表单里铺一段文字 |
+| 2026-11-01 11:23:29 | 修改 | `client/app/src/nodes/mt-condition/form-meta.tsx` | 「页面 id」改为**多选下拉**（选项来自页面表，显示「首页（home）」），逗号拼接后存回 `judgeExpect`；页面清单与新界面说明移入标签的 `title` |
+| 2026-11-01 11:23:29 | 新增 | `client/app/src/plugins/variable-panel-plugin/components/page-table-editor.tsx` | 变量面板新增「页面表」页签：逐行编辑页面（id / 中文名 / 识别特征），可新增与删除；写回全局变量 `app.default.pages` |
+| 2026-11-01 11:13:28 | 修改 | `data/workflows/发布{图文,文字,长文}笔记.json` `client/app/src/nodes/mt-condition/form-meta.tsx` | 页面表补 `title`（权限弹窗/系统选图/发布编辑页/…/个人页/首页），条件节点「页面是」下方列出**全部可填值**（中文名 + id），并提示「要加新界面得先在页面表里登记」。仍为文本框，不做下拉 |
+| 2026-11-01 11:13:28 | 事故修复 | `data/workflows/*.json` | 一次写坏的迁移脚本把三个模板的页面表清空成 `{"id": null}`（markers 丢失）。从内核内存缓存（损坏前加载）导出并写回，12/13/12 个页面与节点数均校验通过 |
+| 2026-11-01 11:08:40 | bug修复 | `packages/automation/automation/src/graph/run.ts` | 依据「内置文件要显示人话」：`内置 ADB 输入法` / `内置 yadb` 这类**可读文字**由引擎翻译成真实路径（旧的 `{{adbKeyboardApk}}` 写法仍兼容）。同时修 `enableIme`：改用 `ime list -a` 并只解析「以 `:` 结尾」的 id 行——`-s` 只列已启用项，刚装的输入法不在里面会误报「没有匹配」；`-a` 里的 `sourceDir=/data/…` 也被误当成 id |
+| 2026-11-01 11:08:40 | 修改 | `data/workflows/发布{图文,文字,长文}笔记.json` | 安装包/本地路径的默认值改为可读文字：`内置 ADB 输入法` / `内置 yadb` |
+| 2026-11-01 10:57:26 | 修改 | `packages/automation/automation/src/graph/run.ts` `client/app/src/nodes/mt-action/form-meta.tsx` | 新增通用动作 `pushToGallery`（推送到相册）：节点自带「图片路径」多行输入，多张用逗号/换行，倒序推送后把路径写回 `flowParams.imagePaths`（下游选图按数量用）。路径为空时明确失败并提示改用「发布文字笔记」 |
+| 2026-11-01 10:57:26 | 修改 | `data/workflows/发布图文笔记.json` | 删掉「有图片吗」条件分支；「上传图片到相册」改为「推送到相册」并带图片路径字段；`imagePaths` 从「开始」参数中移除 |
+| 2026-11-01 10:57:26 | bug修复 | `client/app/src/nodes/mt-action/form-meta.tsx` | 用 `Input.TextArea` 导致白屏（Semi 的 TextArea 是顶层导出，`Input.TextArea` 不存在），改为 `import { TextArea }` |
+| 2026-11-01 10:57:26 | 修改 | `client/app/src/nodes/mt-action/form-meta.tsx` `packages/app/desktop/src/{main,preload}.cjs` | 按反馈去掉文件选择按钮：安装包/本地路径改为**可编辑的默认值**（`resources/tools/ADBKeyboard.apk` / `resources/tools/yadb`），并删除因此无用的 `local-file.ts` 与 Electron 文件对话框 IPC |
+| 2026-11-01 10:43:20 | bug修复 | `data/workflows/发布{图文,文字,长文}笔记.json` | 三个模板的「开始」节点补上参数声明（`outputs` JSON Schema，带中文 `title`）：图文=标题/正文/图片路径/音乐图集图片/保存方式，文字另加文字内容，长文仅标题正文保存方式。此前一个参数都没声明，试运行面板永远是空的 |
+| 2026-11-01 10:43:20 | 修改 | `client/app/src/components/testrun/{hooks/use-form-meta.ts,testrun-form/*}` | 试运行面板用参数声明的 `title` 当字段名（「图片路径」而不是 `imagePaths`） |
+| 2026-11-01 10:43:20 | 修改 | `client/app/src/nodes/mt-condition/form-meta.tsx` | 条件节点「参数名」改为「看哪个输入」：已声明的参数只读显示中文名 + 说明「在「试运行」里填它」；未声明的仍可手填并给黄色警告。**不做下拉** |
+| 2026-11-01 10:27:37 | 新增 | `packages/app/desktop/src/{main,preload}.cjs` `client/app/src/services/local-file.ts` | 桌面端文件选择：主进程 `ipcMain.handle('dialog/openFile')` + preload `pickFile()`；前端 helper 提供 `pickLocalFile` / `canPickLocalFile` / `displayLocalPath` / `isBuiltinPath` |
+| 2026-11-01 10:27:37 | 修改 | `client/app/src/nodes/mt-action/form-meta.tsx` | 「安装包 / 本地路径」改为带「选择…」按钮的文件字段；内置占位符显示成「内置 · ADBKeyboard」「内置 · yadb」并只读（防止把展示文字当路径存进去）；浏览器无对话框时退化为「改成自定义路径」，选过自定义后可「用内置的」还原 |
+| 2026-11-01 10:20:19 | 修改 | `packages/automation/automation/src/graph/run.ts` `client/app/src/nodes/mt-action/form-meta.tsx` | 「启用输入法」改为填**输入法名称片段**（如 `adbkeyboard`、`sogou`）：引擎在 `ime list -s` 里唯一匹配后切换；命中 0 个报错并列出设备已装项，命中多个报错并列出候选；含 `/` 按完整标识直用。设备无输入法显示名（`nonLocalizedLabel=null`），所以只能按片段匹配 |
+| 2026-11-01 10:20:19 | 修改 | `data/workflows/发布{图文,文字,长文}笔记.json` | 启用输入法节点的取值由完整标识改为 `adbkeyboard` |
+| 2026-11-01 10:13:38 | 新增 | `packages/automation/automation/src/graph/run.ts` `packages/client/app/src/nodes/mt-action/form-meta.tsx` | 三个面向非开发者的**通用动作**（「做什么」下拉即可选，不再需要动作名字段）：`push` 推送文件（本地路径 + 目标目录，文件名自动沿用，推完自动 `chmod 755`）、`installApp` 安装应用（安装包 + 应用名，内部推送后 `pm install`）、`enableIme` 启用输入法（输入法标识） |
+| 2026-11-01 10:13:38 | 修改 | `data/workflows/发布{图文,文字,长文}笔记.json` | 准备链路改用通用动作：`安装应用`/`推送文件`/`启用输入法`，节点上不再出现代码标识或命令行 |
+| 2026-11-01 10:13:38 | 删除 | `packages/flow/flow-xhs-publish/src/graph-runtime.ts` | 撤掉上一版专用动作 `installAdbKeyboard` / `enableAdbKeyboardIme` / `pushYadb`（已被通用动作取代，避免两套并存） |
+| 2026-11-01 10:02:15 | 新增 | `packages/flow/flow-xhs-publish/src/graph-runtime.ts` | 三个面向非开发者的具名动作：`installAdbKeyboard`（推送+安装）、`enableAdbKeyboardIme`（启用+切换输入法）、`pushYadb`（推送+授权）。路径取自环境（`MYT_ADB_KEYBOARD_APK` / `ctx.yadbPath`），画布不再出现命令 |
+| 2026-11-01 10:02:15 | 修改 | `data/workflows/发布{图文,文字,长文}笔记.json` | 准备链路里的 4 个「设备命令」节点换成 3 个具名动作；节点数 34→31 / 28→25 / 27→24，准备段从 10 节点降为 7 节点，全部是具名动作或可读条件 |
+| 2026-11-01 09:51:45 | bug修复 | `packages/client/app/src/services/{workflow-api,device-api}.ts` `components/workflow-picker/index.tsx` | 内核地址默认改为**同源**（原写死 `http://127.0.0.1:7788`）：从其它端口打开画布会被浏览器当跨域拦成 `Failed to fetch`。需要别的内核时用 `VITE_KERNEL_BASE` 覆盖；错误提示改为指引 `pnpm dev:canvas` |
+| 2026-11-01 09:50:34 | 新增 | `scripts/dev-canvas.mjs` `package.json` | `pnpm dev:canvas`：同源托管画布前端并把 `/api` 反代到内核（解决前端写死 7788 被 CORS 拦成 `Failed to fetch`）；内核没起会自动拉起 7788，Ctrl+C 一并关闭。默认 http://127.0.0.1:3000 |
+| 2026-11-01 09:44:26 | 新增 | `packages/device/device/src/index.ts` `packages/device/device-adb/src/index.ts` | 设备契约新增 `adb(serial, args)`：原样执行 `adb -s <serial> <args…>`。`shell` 只能跑 `adb shell`，覆盖不到 `push`/`install`。**不做白名单**（按约定由画布配置者自负后果） |
+| 2026-11-01 09:44:26 | 新增 | `packages/automation/automation/src/graph/run.ts` | 动作类型 `adb`（参数 `actArgs`，支持引号分组与 `{{yadbPath}}`/`{{adbKeyboardApk}}` 内置占位符）；条件类型 `apkInstalled`（`pm list packages`）/ `fileExists`（`ls`） |
+| 2026-11-01 09:44:26 | 修改 | `packages/client/app/src/nodes/mt-action/form-meta.tsx` `mt-condition/form-meta.tsx` | 界面新增「设备命令」动作与「设备已装某应用」「设备上有某文件」两个判断方式，均带中文释义 |
+| 2026-11-01 09:44:26 | 修改 | `data/workflows/发布{图文,文字,长文}笔记.json` | `prepareEnvironment` 复合动作拆成 10 个可见节点（APK 检查→推送→安装→启用输入法→yadb 检查→推送→授权→首页检查→打开首页），节点数 25→34 / 19→28 / 18→27 |
+| 2026-11-01 03:45:07 | bug修复 | `packages/client/app/src/nodes/mt-action/form-meta.tsx` | 「怎么找 / 找什么」原先对 7 种动作全显示，但只有「点击」「输入文字」需要定位——选「自定义动作」时填了也不生效，误导用户。现按 `actKind` 门控，仅 tap/input 渲染；并补充「动作名」释义（业务包注册的动作、查不到会报「未注册自定义动作」、不需要在屏幕上找目标） |
+| 2026-11-01 01:53:32 | bug修复 | `packages/client/app/src/hooks/use-editor-props.tsx` | i18n 语言固定为 `zh-CN`（原取 `navigator.language`，英文系统浏览器会把 flowgram 自带文案渲染成英文）；zh-CN 词典补齐 24 个 flowgram 键（Add/AND/ELSE/True/False/Description/Please Input … 等） |
+| 2026-11-01 01:53:32 | 修改 | `packages/client/app/src/components/tools/*` `selector-box-popover` `variable-panel-plugin` | 全部图标按钮的 Tooltip 中文化并加释义：变量面板／自动排版／切换连线／适应画布／小地图／锁定画布／注释／撤销／重做／问题／导出；多选浮层（折叠/展开/创建分组/复制/删除）；变量页签（变量列表/全局变量编辑）；变量面板开关 |
+| 2026-11-01 01:53:32 | 修改 | `packages/client/app/src/form-components/form-item/index.tsx` `nodes/condition/condition-inputs` | `FormItem` 增加可选 `label`（`name` 同时是引擎路由用的端口名，不能直接改中文）；条件节点端口 `else` 显示为「其他情况」，`Add` 按钮改为「添加条件」 |
+| 2026-11-01 01:53:32 | 修改 | `packages/client/app/src/{shortcuts/copy,shortcuts/paste,nodes/default-form-meta,plugins/runtime-plugin/runtime-service,components/testrun/node-status-bar/viewer}` | 提示文案中文化：已复制到剪贴板／剪贴板内容无法识别／请填写标题／服务内部错误／已复制 |
+| 2026-11-01 00:43:17 | 修改 | `packages/client/app/src/nodes/*/index.ts(x)` `typings/node.ts` `components/node-panel/node-list.tsx` | 按《流程图引擎与可视化编排》界面文案规范中文化：`info` 增加 `title`（面板中文名，缺省回落类型名），节点面板标签改用 `info.title`（动作/条件判断/循环/开始/结束/脚本/接口请求/大模型/变量/循环开始/循环结束/跳出循环/继续下一轮/多路分支），并把 `description` 作为悬浮释义（`title` 属性） |
+| 2026-11-01 00:43:17 | 修改 | `packages/client/app/src/components/` | 界面英文改中文：节点菜单（改标题/移出分组/创建副本/自动排版/删除）、问题面板（问题）、缩放菜单（放大/缩小/缩放到 N%）、试运行面板与按钮（试运行/取消/运行中…/输入参数/JSON 模式/输入结果/输出结果）、参数表单（请输入整数/数字/文本、暂无参数）、节点状态（运行中/未运行/成功/失败/已取消、输入/输出/走哪个出口/数据）、添加节点按钮、折叠/展开快捷键名、HTTP 体类型（无/纯文本）、变量面板（全局变量）、条件节点默认标题 |
+| 2026-11-01 00:24:03 | 验证 | `packages/core/task-api/` `packages/client/app/.../test-run-panel.tsx` | 画布设备选择端到端打通：面板 `deviceId` 存 serial → `POST /api/task/run` inputs → `pickDevice` ①分支按 `ip:port` 直取 → 真机执行。实测 127.0.0.1:5565，`validate` 通过、`run` 状态 `succeeded`、`act` 节点 603ms |
+| 2026-11-01 00:24:03 | 缺陷记录 | `data/workflows/新流程测试.json` | `globalVariable.app.default.packageName` 为空串，`/api/task/validate` 直接报「字段「packageName」必须是非空字符串」——该模板无法试跑。待补真实包名（或改为继承其它模板） |
+| 2026-11-01 00:11:30 | 新增 | `scripts/smoke-packaged-app.ts` | 打包产物冒烟：启动 `dist/win-unpacked/MYT.exe` → 轮询 `/api/health` → 校验 `/` 出 HTML → `taskkill /T` 回收进程树。端口先挑空闲再经 `MYT_PORT` 传入，数据目录用临时目录，宿主默认置 `127.0.0.1`（空串会被 Electron fork 丢掉并回落成产物内置的 192.168.0.113，实测踩过）。`pnpm smoke:dist` 调用；2/2 通过 2.6s，错误路径退出码 1 |
+| 2026-11-01 00:04:43 | bug修复 | `packages/automation/automation/src/graph/run.ts` | 中止原因只留了节点原因，丢掉端口名（`graph.test.ts` 4 个用例红）。改为两者拼接 `经「failure」端口中止：<节点原因>`；无节点原因时退回原措辞 |
+| 2026-10-31 23:51:28 | 新增 | `packages/core/runs/src/event-log.ts` | 事件日志落 SQLite（WAL，表 `events`，`WITHOUT ROWID` + `ts` 索引）：只追加、`seq` 按 run 单调、写入前递归脱敏、保留期清理、按 run 导出 JSONL |
+| 2026-10-31 23:51:28 | 修改 | `packages/core/runs/src/index.ts` | `RunStore` 接入落库：`dbPath`/`retentionDays` 配置、打开前内存队列按序补写、启动从事件表重建投影、库里 `running` 改标 `interrupted` 不续跑、新增 `whenReady`/`exportJsonl`/`prune`/`close` |
+| 2026-10-31 23:51:28 | 新增 | `packages/core/runs/src/event-log.test.ts` | 8 个用例：重建还原、崩溃恢复、seq 单调只追加、JSONL 导出、纯内存降级、保留期幂等、脱敏（含大小写/下划线变体） |
+| 2026-10-31 23:51:28 | 修改 | `docs/spec/runtime-and-storage.md` | 新增「§0 实施状态」：事件日志/事件模型/投影/保留期已实现，业务表其余表与产物存储未实现 |
+| 2026-10-31 23:36:07 | 新增 | `packages/automation/automation/src/page-guard.ts` | `PageSpec.contentMarkers` + `resolveByContent` + `hasContentMarkers`：Activity 认不出真实页面时用界面文字兜底（长文编辑页内嵌在文字编辑页，`mCurrentFocus` 报旧 Activity） |
+| 2026-10-31 23:36:07 | bug修复 | `packages/flow/flow-xhs-publish/src/flows/publish-article.ts` | `dismiss-try-it` 补 `strict: true`：模型把「试试看 try it」定位成左上角「返回」，一点就退掉长文页，下游全判「页面不对」 |
+| 2026-10-31 23:36:07 | bug修复 | `packages/flow/flow-xhs-publish/src/flows/publish-image.ts` `publish-text.ts` | `allow-album` / `done` 补 `strict: true`，与已修的两处误点同类 |
+| 2026-10-31 23:36:07 | 修改 | `packages/flow/flow-xhs-publish/src/pages.ts` | `XHS_PAGES` 给 `article-editor` / `text-note` 加 `contentMarkers` |
+| 2026-10-31 23:36:07 | 修改 | `data/workflows/发布长文笔记.json` | `dismiss-try-it` / `dismiss-album-location` 补 `optional`+`rounds`+`gap`+`locateStrict`；页表补 `contentMarkers` |
 | 2026-11-01 22:00:00 | bug修复 | `packages/automation/automation/src/graph/run.ts` | 失败原因被吞：`failure` 端口有连线时节点 reason 丢失，只剩「经 X 端口中止」。现在 trail 记录每个节点 reason，中止时带出第一个 |
 | 2026-11-01 22:00:00 | bug修复 | `packages/automation/ui-decide/src/ui-locate.ts` | 候选多（18+）时模型输出 `{"index":[17,19,...]}` 被 64 token 截断，定位作废。提示词约束单选 + 解析器只接受单元素数组 |
 | 2026-11-01 22:00:00 | 修改 | `packages/flow/flow-xhs-publish/src/graph-runtime.ts` | `waitGallery` 补 5 轮重试（此前只重开一次）；`prepareEnvironment` 已到位跳过；加 `safeCurrentPage` 避免无 `ctx.app.pages` 时抛错 |

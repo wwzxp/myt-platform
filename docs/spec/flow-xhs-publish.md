@@ -488,6 +488,21 @@ flowchart LR
 **`strict` 是踩出来的**：默认模式下模型找不到目标会从剩余候选里挑一个最像的。
 在发布编辑页找「取消」时，它选中了「返回」——一点就退回图片编辑页，整单失败。
 
+同类误点实测记录（都是 `optional` 动作，失败时不报错，只把流程带歪）：
+
+| 意图 | 实际命中 | 后果 |
+|---|---|---|
+| `取消` | 「返回」 | 退出图片编辑页 |
+| `取消` | 「小组件浏览记录的按钮」 | 点了无关控件 |
+| `试试看 try it` | 「返回」(62,92) | **把刚打开的长文编辑页退掉**，后续全判「页面不对」 |
+
+**规则**：`optional: true` 的动作**必须**同时给 `strict: true`。
+
+`optional` 只承诺「找不到算成功」，它不约束模型必须真的找不到才放弃——
+没有 `strict`，模型会挑一个无关候选并点下去，而 `optional` 让这个误点
+**不产生任何报错**，故障点因此漂移到几步之后。
+这三个环节之前都是 `optional` 无 `strict`，现在全部补齐。
+
 ## 选图是一个动作，不是 N 个
 
 选图是**有状态的批量操作**：要数当前勾了几张、不够要滚动补选、
@@ -625,6 +640,36 @@ app: {
 ```
 
 **顺序很重要**：更具体的页面排在前面（`post-editor` 在 `album` 之前）。
+
+### 内容兜底：Activity 认不出真实页面时
+
+只有 `markers`（Activity 名）不够。实测小红书**长文编辑页内嵌在文字编辑页里**：
+界面上已经是「输入标题 / 一键排版 / 粘贴到这里」，但 `mCurrentFocus`
+仍然报旧的 `CapaPortraitEditV2Activity`（甚至 `IndexActivityV2`）。
+
+按 Activity 判定就会得出「当前在 text-note」的结论，后续所有
+`requires: article-editor` 的动作全部判失败。
+
+所以 `PageSpec` 增加可选的 `contentMarkers`（界面上必须**同时出现**的文字）：
+
+```ts
+{ id: 'article-editor', markers: ['LongNoteEditActivity'],
+  contentMarkers: ['输入标题', '一键排版'] },
+{ id: 'text-note', markers: ['CapaPortraitEditV2Activity'],
+  contentMarkers: ['写想法'] },
+```
+
+`currentPage` 的判定顺序：
+
+1. `mCurrentFocus` 的 Activity 名匹配 `markers` → 直接用（快，绝大多数页面走这条）
+2. 认不出时，取一次 UI 快照，用 `resolveByContent` 按 `contentMarkers` 判定
+3. 都不中 → `UNKNOWN_PAGE`
+
+`contentMarkers` 匹配按注册顺序取第一个命中，且要求**全部**特征文字都在。
+所以 `article-editor` 必须排在 `text-note` 之前——两者都能看到「输入标题」以外的文字，
+顺序错了长文页会被误判成文字页。
+
+没有页面声明 `contentMarkers` 时不会取快照（`hasContentMarkers()` 短路），零额外开销。
 
 ## 恢复规则也搬到业务包
 

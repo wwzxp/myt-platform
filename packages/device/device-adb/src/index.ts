@@ -239,6 +239,16 @@ export class AdbDeviceControl extends DeviceControl {
     return this.shell(serial, command, { root: true })
   }
 
+  /**
+   * 直接执行 adb 子命令。
+   *
+   * 与 `shell` 的区别：`shell` 固定加 `shell` 前缀，跑不了 `push`/`install`；
+   * 这里参数原样透传，画布上的「设备命令」动作走这条路。
+   */
+  async adb(serial: string, args: readonly string[]): Promise<string> {
+    return this.runShell(serial, [...args])
+  }
+
   async ensureYadb(serial: string, localPath: string): Promise<void> {
     // 旧实现每次登录都会 push（幂等，覆盖即可），这里保持一致。
     await run(this.adbPath, ['-s', serial, 'push', localPath, YADB_REMOTE], {

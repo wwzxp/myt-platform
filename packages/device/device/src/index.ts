@@ -128,6 +128,15 @@ export abstract class DeviceControl extends Service {
   ): Promise<string>
 
   /**
+   * 直接执行 adb 子命令（`adb -s <serial> <args…>`），返回 stdout。
+   *
+   * 供画布上的「设备命令」动作使用：`shell` 只能跑 `adb shell`，
+   * 覆盖不到 `push` / `install` / `pull` 这类子命令。
+   * **不做命令白名单**——调用方（画布配置者）自负后果。
+   */
+  abstract adb(serial: string, args: readonly string[]): Promise<string>
+
+  /**
    * 拉取受保护路径下的文件（/data/data 需要 root）。
    *
    * 返回 `{ size }` 表示成功；文件不存在或不可读返回 null（旧实现记 `present=false`）。

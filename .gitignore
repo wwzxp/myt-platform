@@ -28,3 +28,13 @@ vendor/*/src/*.js
 vendor/*/src/*.js.map
 vendor/*/src/*.d.ts
 vendor/*/src/*.d.ts.map
+
+# packages 里的 tsc 输出（源码是 .ts，旁边的 js/d.ts 是构建产物，不入库）
+packages/*/*/src/*.js
+packages/*/*/src/*.js.map
+packages/*/*/src/*.d.ts
+packages/*/*/src/*.d.ts.map
+packages/*/*/src/**/*.js
+packages/*/*/src/**/*.js.map
+packages/*/*/src/**/*.d.ts
+packages/*/*/src/**/*.d.ts.map

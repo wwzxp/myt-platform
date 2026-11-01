@@ -51,7 +51,7 @@ export const TestRunForm: FC<TestRunFormProps> = ({ values, setValues }) => {
               precision={0}
               value={field.value}
               onChange={(value) => field.onChange(value)}
-              placeholder="Please input integer"
+              placeholder="请输入整数"
             />
           </div>
         );
@@ -61,7 +61,7 @@ export const TestRunForm: FC<TestRunFormProps> = ({ values, setValues }) => {
             <InputNumber
               value={field.value}
               onChange={(value) => field.onChange(value)}
-              placeholder="Please input number"
+              placeholder="请输入数字"
             />
           </div>
         );
@@ -83,7 +83,7 @@ export const TestRunForm: FC<TestRunFormProps> = ({ values, setValues }) => {
             <Input
               value={field.value}
               onChange={(value) => field.onChange(value)}
-              placeholder="Please input text"
+              placeholder="请输入文本"
             />
           </div>
         );
@@ -95,8 +95,8 @@ export const TestRunForm: FC<TestRunFormProps> = ({ values, setValues }) => {
     return (
       <div className={styles.formContainer}>
         <div className={styles.emptyState}>
-          <div className={styles.emptyText}>Empty</div>
-          <div className={styles.emptyText}>No inputs found in start node</div>
+          <div className={styles.emptyText}>暂无参数</div>
+          <div className={styles.emptyText}>「开始」节点还没有定义输入参数</div>
         </div>
       </div>
     );
@@ -107,7 +107,7 @@ export const TestRunForm: FC<TestRunFormProps> = ({ values, setValues }) => {
       {fields.map((field) => (
         <div key={field.name} className={styles.fieldGroup}>
           <label htmlFor={field.name} className={styles.fieldLabel}>
-            {field.name}
+            {field.title ?? field.name}
             {field.required && <span className={styles.requiredIndicator}>*</span>}
             <span className={styles.fieldTypeIndicator}>
               <DisplaySchemaTag

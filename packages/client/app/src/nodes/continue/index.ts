@@ -26,9 +26,9 @@ export const ContinueNodeRegistry: FlowNodeRegistry = {
     onlyInContainer: WorkflowNodeType.Loop,
   },
   info: {
+    title: '继续下一轮',
     icon: iconContinue,
-    description:
-      'The final node of the workflow, used to return the result information after the workflow is run.',
+    description: '跳过本轮剩下的步骤，直接开始下一轮',
   },
   /**
    * Render node via formMeta

@@ -30,8 +30,9 @@ export const BlockStartNodeRegistry: FlowNodeRegistry = {
     },
   },
   info: {
+    title: '循环开始',
     icon: iconStart,
-    description: 'The starting node of the block.',
+    description: '循环体的入口标记，添加循环时自动出现',
   },
   /**
    * Render node via formMeta

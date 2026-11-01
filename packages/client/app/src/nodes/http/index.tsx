@@ -15,8 +15,9 @@ let index = 0;
 export const HTTPNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.HTTP,
   info: {
+    title: '接口请求',
     icon: iconHTTP,
-    description: 'Call the HTTP API',
+    description: '调用一个 HTTP 接口并取回结果',
   },
   meta: {
     size: {

@@ -22,7 +22,7 @@ export const AddNode = (props: { disabled: boolean }) => {
         addNode(rect);
       }}
     >
-      Add Node
+      添加节点
     </Button>
   );
 };

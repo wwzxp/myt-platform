@@ -125,7 +125,7 @@ export class PasteShortcut implements ShortcutsHandler {
   private isValidData(data?: WorkflowClipboardData): boolean {
     if (data?.type !== WorkflowClipboardDataID) {
       Toast.error({
-        content: 'Invalid clipboard data',
+        content: '剪贴板内容无法识别',
       });
       return false;
     }

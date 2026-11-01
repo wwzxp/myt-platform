@@ -10,7 +10,7 @@ import { IconExpand } from '@douyinfe/semi-icons';
 export const FitView = () => {
   const tools = usePlaygroundTools();
   return (
-    <Tooltip content="FitView">
+    <Tooltip content="适应画布（把所有节点缩到一屏）">
       <IconButton
         icon={<IconExpand />}
         type="tertiary"

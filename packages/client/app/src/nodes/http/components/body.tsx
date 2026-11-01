@@ -16,7 +16,7 @@ import { FormItem } from '../../../form-components';
 
 const BODY_TYPE_OPTIONS = [
   {
-    label: 'None',
+    label: '无',
     value: 'none',
   },
   {
@@ -24,7 +24,7 @@ const BODY_TYPE_OPTIONS = [
     value: 'JSON',
   },
   {
-    label: 'Raw Text',
+    label: '纯文本',
     value: 'raw-text',
   },
 ];

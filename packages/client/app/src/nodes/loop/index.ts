@@ -19,6 +19,7 @@ let index = 0;
 export const LoopNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.Loop,
   info: {
+    title: '循环（通用）',
     icon: iconLoop,
     description: '重复做几次：循环体画在框内',
   },

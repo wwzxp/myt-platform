@@ -44,7 +44,7 @@ export const createVariablePanelPlugin = definePluginCreator<{ initialData?: IJs
         ASTFactory.createVariableDeclaration({
           key: 'global',
           meta: {
-            title: 'Global',
+            title: '全局变量',
             icon: iconVariable,
           },
           type: JsonSchemaUtils.schemaToAST(opts.initialData),
@@ -57,7 +57,7 @@ export const createVariablePanelPlugin = definePluginCreator<{ initialData?: IJs
           ASTFactory.createVariableDeclaration({
             key: 'global',
             meta: {
-              title: 'Global',
+              title: '全局变量',
               icon: iconVariable,
             },
             type: JsonSchemaUtils.schemaToAST(v),

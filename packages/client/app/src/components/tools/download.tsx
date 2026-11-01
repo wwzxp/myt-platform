@@ -94,7 +94,7 @@ export const DownloadTool: FC = () => {
         button
       ) : (
         <div>
-          <Tooltip content="Download">{button}</Tooltip>
+          <Tooltip content="导出（保存成图片或 JSON）">{button}</Tooltip>
         </div>
       )}
     </Dropdown>

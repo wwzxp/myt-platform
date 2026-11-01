@@ -8,6 +8,8 @@ import type { JsonSchemaBasicType } from '@flowgram.ai/form-materials';
 export interface TestRunFormMetaItem {
   type: JsonSchemaBasicType;
   name: string;
+  /** 界面上显示的中文名（来自参数声明的 `title`）；缺省回落到 `name`。 */
+  title?: string;
   defaultValue: unknown;
   required: boolean;
   itemsType?: JsonSchemaBasicType;

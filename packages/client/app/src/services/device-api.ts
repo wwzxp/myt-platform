@@ -5,10 +5,12 @@
  * 与 `workflow-api` 同一套请求封装，指向同一个内核。
  */
 
-/** 内核地址（可用 `VITE_KERNEL_BASE` 覆盖，便于开发时指向其它端口）。 */
+/**
+ * 内核地址。默认同源（空串），理由见 `workflow-api.ts`；
+ * 需要指向别的内核时用 `VITE_KERNEL_BASE` 覆盖。
+ */
 const KERNEL_BASE: string =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.['VITE_KERNEL_BASE'] ??
-  'http://127.0.0.1:7788'
+  (import.meta as unknown as { env?: Record<string, string> }).env?.['VITE_KERNEL_BASE'] ?? ''
 
 /** 一台可选设备（`/api/devices` 投影出来的一行）。 */
 export interface SelectableDevice {

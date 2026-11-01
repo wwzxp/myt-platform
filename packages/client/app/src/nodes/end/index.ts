@@ -21,6 +21,7 @@ export const EndNodeRegistry: FlowNodeRegistry = {
     },
   },
   info: {
+    title: '结束',
     icon: iconEnd,
     description: '流程结束',
   },

@@ -32,7 +32,7 @@ export function TestRunButton(props: { disabled: boolean }) {
     const allForms = clientContext.document.getAllNodes().map((node) => node.form);
     await Promise.all(allForms.map(async (form) => form?.validate()));
     // 先保存：Test Run 用内核里的最新版执行，不能跑旧图
-    if (!workflow) throw new Error('Test Run 失败：不在流程编辑器中');
+    if (!workflow) throw new Error('试运行失败：不在流程编辑器中');
     await workflow.save();
     openPanel();
   }, [workflow]);
@@ -63,7 +63,7 @@ export function TestRunButton(props: { disabled: boolean }) {
         icon={<IconPlay size="small" />}
         className={styles.testrunSuccessButton}
       >
-        Test Run
+        试运行
       </Button>
     ) : (
       <Badge count={errorCount} position="rightTop" type="danger">
@@ -74,7 +74,7 @@ export function TestRunButton(props: { disabled: boolean }) {
           icon={<IconPlay size="small" />}
           className={styles.testrunErrorButton}
         >
-            Test Run
+          试运行
         </Button>
       </Badge>
     );

@@ -63,6 +63,8 @@ export interface FlowNodeMeta extends WorkflowNodeMeta {
 export interface FlowNodeRegistry extends FlowNodeRegistryDefault {
   meta: FlowNodeMeta;
   info?: {
+    /** 面板上显示的中文名（如「动作」）。缺省时回落到节点类型名。 */
+    title?: string;
     icon: string;
     description: string;
   };

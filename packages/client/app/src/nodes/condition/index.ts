@@ -13,6 +13,7 @@ import { WorkflowNodeType } from '../constants';
 export const ConditionNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.Condition,
   info: {
+    title: '条件分支（通用）',
     icon: iconCondition,
     description: '先判断一下，再决定走哪条路',
   },
@@ -40,7 +41,7 @@ export const ConditionNodeRegistry: FlowNodeRegistry = {
       id: `condition_${nanoid(5)}`,
       type: 'condition',
       data: {
-        title: 'Condition',
+        title: '条件分支',
         conditions: [
           {
             key: `if_${nanoid(5)}`,

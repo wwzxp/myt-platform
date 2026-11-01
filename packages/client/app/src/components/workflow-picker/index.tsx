@@ -79,7 +79,10 @@ export const WorkflowPicker = () => {
       <div style={wrap}>
         <h2 style={{ marginBottom: 8 }}>读取流程列表失败</h2>
         <p style={{ color: '#c0392b' }}>{error}</p>
-        <p style={{ opacity: 0.65 }}>确认后端已启动（默认 127.0.0.1:7788）。</p>
+        <p style={{ opacity: 0.65 }}>
+          确认内核已启动。开发时用 <code>pnpm dev:canvas</code> 打开本页（它会一并拉起内核并代理
+          <code>/api</code>）。
+        </p>
       </div>
     );
   }

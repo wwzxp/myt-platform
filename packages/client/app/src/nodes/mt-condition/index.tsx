@@ -15,6 +15,7 @@ let index = 0
 export const MTConditionNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.MTCondition,
   info: {
+    title: '条件判断',
     icon: iconCondition,
     description: '先判断一下，再决定走哪条路',
   },

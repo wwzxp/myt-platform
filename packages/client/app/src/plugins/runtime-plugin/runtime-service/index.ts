@@ -94,7 +94,7 @@ export class WorkflowRuntimeService {
     });
     if (!validateResult?.valid) {
       this.resultEmitter.fire({
-        errors: validateResult?.errors ?? ['Internal Server Error'],
+        errors: validateResult?.errors ?? ['服务内部错误'],
       });
       return;
     }

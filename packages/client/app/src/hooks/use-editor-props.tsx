@@ -288,11 +288,40 @@ export function useEditorProps(
         console.log('---- Playground Dispose ----');
       },
       i18n: {
-        locale: navigator.language,
+        // 产品面向国内客户、不做多语言（见《ui-information-architecture》§6），固定中文。
+        // 之前取 `navigator.language`，英文系统的浏览器会把 flowgram 自带文案
+        // 渲染成英文（如「Select Variable」「Add」），与界面文案规范冲突。
+        locale: 'zh-CN',
         languages: {
           'zh-CN': {
+            // flowgram 自带文案的键（从产物里 `.t("…")` 提取，共 24 个）。
+            // 不翻译就会在界面上露英文——例如全局变量编辑器里的「Add」。
             'Never Remind': '不再提示',
             'Hold {{key}} to drag node out': '按住 {{key}} 可以将节点拖出',
+            'Select Variable': '选择变量',
+            Add: '添加',
+            'Add branch': '添加分支',
+            'Add condition': '添加条件',
+            AND: '并且',
+            ELSE: '否则',
+            'ELSE-IF': '否则如果',
+            True: '是',
+            False: '否',
+            Empty: '空',
+            Description: '描述',
+            'Default Value': '默认值',
+            'Default value if parameter is not provided': '不传参数时使用的默认值',
+            'Help LLM to understand the property': '帮助大模型理解这个字段',
+            'Input Key': '输入键名',
+            'Input Variable Name': '输入变量名',
+            'Please Input Array': '请输入数组',
+            'Please Input Integer': '请输入整数',
+            'Please Input Map': '请输入键值对',
+            'Please Input Number': '请输入数字',
+            'Please Input Object': '请输入对象',
+            'Please Input String': '请输入文本',
+            'Please Select Boolean': '请选择布尔值',
+            'Remove branch': '删除分支',
           },
           'en-US': {},
         },

@@ -38,7 +38,9 @@ export const ProblemPanel = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', columnGap: '4px', height: '100%' }}>
-          <Typography.Text strong>Problem</Typography.Text>
+          <Typography.Text strong title="流程校验未通过的地方，逐条列出原因">
+            问题
+          </Typography.Text>
           {loading && <Spin size="small" style={{ lineHeight: '0' }} />}
         </div>
         <IconButton
@@ -88,7 +90,7 @@ export const ProblemPanel = () => {
 export const ProblemButton = () => {
   const { open } = useProblemPanel();
   return (
-    <Tooltip content="Problem">
+    <Tooltip content="问题（流程校验未通过的地方）">
       <IconButton
         type="tertiary"
         theme="borderless"

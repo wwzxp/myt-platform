@@ -35,8 +35,9 @@ async function main({ params }) {
 export const CodeNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.Code,
   info: {
+    title: '脚本',
     icon: iconCode,
-    description: 'Run the Script',
+    description: '在浏览器里跑一段 JavaScript 脚本',
   },
   meta: {
     size: {

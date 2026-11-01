@@ -30,8 +30,9 @@ export const BlockEndNodeRegistry: FlowNodeRegistry = {
     },
   },
   info: {
+    title: '循环结束',
     icon: iconStart,
-    description: 'The final node of the block.',
+    description: '循环体的出口标记，添加循环时自动出现',
   },
   /**
    * Render node via formMeta

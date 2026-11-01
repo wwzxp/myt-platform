@@ -18,6 +18,7 @@ let index = 0
 export const MTActionNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.MTAction,
   info: {
+    title: '动作',
     icon: iconAction,
     description: '在手机上做一件事：点一下、输文字、滑一下',
   },

@@ -15,7 +15,7 @@ export const Readonly = () => {
     playground.config.readonly = !playground.config.readonly;
   }, [playground]);
   return playground.config.readonly ? (
-    <Tooltip content="Editable">
+    <Tooltip content="解除锁定（切回可编辑）">
       <IconButton
         theme="borderless"
         type="tertiary"
@@ -24,7 +24,7 @@ export const Readonly = () => {
       />
     </Tooltip>
   ) : (
-    <Tooltip content="Readonly">
+    <Tooltip content="锁定画布（防止误改）">
       <IconButton
         theme="borderless"
         type="tertiary"

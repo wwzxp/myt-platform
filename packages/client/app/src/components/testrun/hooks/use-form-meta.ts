@@ -33,6 +33,8 @@ export const useFormMeta = (): TestRunFormMetaItem[] => {
       formFields.push({
         type: property.type as JsonSchemaBasicType,
         name,
+        // 参数声明里的中文名优先，界面不该把 imagePaths 这种键名丢给用户。
+        ...(property.title ? { title: property.title } : {}),
         defaultValue: property.default,
         required: workflowInputs.required?.includes(name) ?? false,
         itemsType: property.items?.type as JsonSchemaBasicType,

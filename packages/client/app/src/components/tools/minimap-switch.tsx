@@ -14,7 +14,7 @@ export const MinimapSwitch = (props: {
   const { minimapVisible, setMinimapVisible } = props;
 
   return (
-    <Tooltip content="Minimap">
+    <Tooltip content="小地图（右下角缩略图）">
       <IconButton
         type="tertiary"
         theme="borderless"

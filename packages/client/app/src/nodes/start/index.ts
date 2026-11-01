@@ -22,6 +22,7 @@ export const StartNodeRegistry: FlowNodeRegistry = {
     },
   },
   info: {
+    title: '开始',
     icon: iconStart,
     description: '流程从这里开始',
   },

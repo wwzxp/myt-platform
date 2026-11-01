@@ -13,9 +13,9 @@ let index = 0;
 export const LLMNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.LLM,
   info: {
+    title: '大模型',
     icon: iconLLM,
-    description:
-      'Call the large language model and use variables and prompt words to generate responses.',
+    description: '调用大模型，用变量和提示词生成回答',
   },
   meta: {
     size: {

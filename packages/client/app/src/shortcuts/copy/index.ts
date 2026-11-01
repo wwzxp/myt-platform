@@ -93,7 +93,7 @@ export class CopyShortcut implements ShortcutsHandler {
     }
     await navigator.clipboard.writeText(window.getSelection()?.toString() ?? '');
     Toast.success({
-      content: 'Text copied',
+      content: '已复制到剪贴板',
     });
     return true;
   }

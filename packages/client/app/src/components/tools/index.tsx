@@ -56,7 +56,7 @@ export const DemoTools = () => {
         <Minimap visible={minimapVisible} />
         <Readonly />
         <Comment />
-        <Tooltip content="Undo">
+        <Tooltip content="撤销（退回上一步）">
           <IconButton
             type="tertiary"
             theme="borderless"
@@ -65,7 +65,7 @@ export const DemoTools = () => {
             onClick={() => history.undo()}
           />
         </Tooltip>
-        <Tooltip content="Redo">
+        <Tooltip content="重做（恢复刚才撤销的那步）">
           <IconButton
             type="tertiary"
             theme="borderless"

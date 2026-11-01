@@ -62,7 +62,7 @@ export function ConditionInputs() {
               )}
             </Field>
           ))}
-          <FormItem name="else" type="boolean" required={true} labelWidth={100}>
+          <FormItem name="else" label="其他情况" type="boolean" required={true} labelWidth={100}>
             <ConditionPort data-port-id="else" data-port-type="output" />
           </FormItem>
           {!readonly && (
@@ -77,7 +77,7 @@ export function ConditionInputs() {
                   })
                 }
               >
-                {I18n.t('Add')}
+                添加条件
               </Button>
             </div>
           )}

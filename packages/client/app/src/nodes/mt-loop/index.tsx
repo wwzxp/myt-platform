@@ -17,6 +17,7 @@ let index = 0
 export const MTLoopNodeRegistry: FlowNodeRegistry = {
   type: WorkflowNodeType.MTLoop,
   info: {
+    title: '循环',
     icon: iconLoop,
     description: '重复做几次：循环体画在框内',
   },

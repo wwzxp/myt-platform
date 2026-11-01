@@ -11,6 +11,7 @@ import { IconMinus } from '@douyinfe/semi-icons';
 import iconVariable from '../../../assets/icon-variable.png';
 import { GlobalVariableEditor } from './global-variable-editor';
 import { FullVariableList } from './full-variable-list';
+import { PageTableEditor } from './page-table-editor';
 
 import styles from './index.module.less';
 
@@ -19,7 +20,7 @@ export function VariablePanel() {
 
   return (
     <div className={styles['panel-wrapper']}>
-      <Tooltip content="Toggle Variable Panel">
+      <Tooltip content="变量面板（流程里可复用的值）">
         <Button
           className={`${styles['variable-panel-button']} ${isOpen ? styles.close : ''}`}
           theme={isOpen ? 'borderless' : 'light'}
@@ -31,11 +32,14 @@ export function VariablePanel() {
       <Collapsible isOpen={isOpen}>
         <div className={styles['panel-container']}>
           <Tabs>
-            <Tabs.TabPane itemKey="variables" tab="Variable List">
+            <Tabs.TabPane itemKey="variables" tab="变量列表">
               <FullVariableList />
             </Tabs.TabPane>
-            <Tabs.TabPane itemKey="global" tab="Global Editor">
+            <Tabs.TabPane itemKey="global" tab="全局变量编辑">
               <GlobalVariableEditor />
+            </Tabs.TabPane>
+            <Tabs.TabPane itemKey="pages" tab="页面表">
+              <PageTableEditor />
             </Tabs.TabPane>
           </Tabs>
         </div>

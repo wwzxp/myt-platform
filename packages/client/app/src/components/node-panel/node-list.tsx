@@ -39,6 +39,8 @@ const NodeLabel = styled.div`
 
 interface NodeProps {
   label: string;
+  /** 一句话中文解释，作为浏览器原生悬浮提示（`title`）。 */
+  hint?: string;
   icon: JSX.Element;
   onClick: React.MouseEventHandler<HTMLDivElement>;
   disabled: boolean;
@@ -48,6 +50,7 @@ function Node(props: NodeProps) {
   return (
     <NodeWrap
       data-testid={`demo-free-node-list-${props.label}`}
+      title={props.hint}
       onClick={props.disabled ? undefined : props.onClick}
       style={props.disabled ? { opacity: 0.3 } : {}}
     >
@@ -106,7 +109,8 @@ export const NodeList: FC<NodeListProps> = (props) => {
             icon={
               <img style={{ width: 10, height: 10, borderRadius: 4 }} src={registry.info?.icon} />
             }
-            label={registry.type as string}
+            label={(registry.info?.title ?? registry.type) as string}
+            hint={registry.info?.description}
             onClick={(e) => handleClick(e, registry)}
           />
         ))}

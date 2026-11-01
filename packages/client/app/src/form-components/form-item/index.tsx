@@ -15,6 +15,15 @@ const { Text } = Typography;
 interface FormItemProps {
   children: React.ReactNode;
   name: string;
+  /**
+   * 界面上显示的中文名。
+   *
+   * `name` 同时是字段名/端口名（引擎按它路由），不能直接改成中文；
+   * 需要中文标签时单独给这个，缺省仍然显示 `name`。
+   */
+  label?: string;
+  /** 标签上的悬浮说明（原生 `title`）；长解释放这里，不要塞在表单里。 */
+  title?: string;
   type?: string;
   required?: boolean;
   description?: string;
@@ -26,6 +35,8 @@ interface FormItemProps {
 export function FormItem({
   children,
   name,
+  label,
+  title,
   required,
   description,
   type,
@@ -37,8 +48,12 @@ export function FormItem({
   const renderTitle = useCallback(
     (showTooltip?: boolean) => (
       <div style={{ width: '0', display: 'flex', flex: '1' }}>
-        <Text style={{ width: '100%' }} ellipsis={{ showTooltip: !!showTooltip }}>
-          {name}
+        <Text
+          style={{ width: '100%', cursor: title ? 'help' : undefined }}
+          ellipsis={{ showTooltip: !!showTooltip }}
+          {...(title ? { title } : {})}
+        >
+          {label ?? name}
           {required && <span style={{ color: '#f93920', paddingLeft: '2px' }}>*</span>}
         </Text>
       </div>

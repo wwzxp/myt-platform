@@ -26,9 +26,9 @@ export const BreakNodeRegistry: FlowNodeRegistry = {
     onlyInContainer: WorkflowNodeType.Loop,
   },
   info: {
+    title: '跳出循环',
     icon: iconBreak,
-    description:
-      'The final node of the workflow, used to return the result information after the workflow is run.',
+    description: '不再继续这一轮，直接离开整个循环',
   },
   /**
    * Render node via formMeta

@@ -5,10 +5,16 @@
  * 路径与 `@myt/workflows` 的 `WorkflowApi` 一一对应。
  */
 
-/** 内核地址（可用 `MYT_KERNEL_BASE` 覆盖，便于开发时指向其它端口）。 */
+/**
+ * 内核地址。
+ *
+ * 默认**同源**（空串）：画布由内核托管（打包版）或经 `pnpm dev:canvas` 代理，
+ * 两种情况都同源。原先写死 `http://127.0.0.1:7788`，从其它端口打开时会被浏览器
+ * 当跨域拦成 `Failed to fetch`（dsh 的 web server 只在预检和部分路由带跨域头）。
+ * 需要指向别的内核时用 `VITE_KERNEL_BASE` 覆盖。
+ */
 const KERNEL_BASE: string =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.['VITE_KERNEL_BASE'] ??
-  'http://127.0.0.1:7788'
+  (import.meta as unknown as { env?: Record<string, string> }).env?.['VITE_KERNEL_BASE'] ?? ''
 
 /** 流程摘要（列表页用）。 */
 export interface WorkflowSummary {

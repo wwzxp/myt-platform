@@ -44,6 +44,37 @@ export {
 } from './page-guard.ts'
 
 export {
+  buildAlignPrompt,
+  parseAlignTable,
+  translateTerms,
+  type AlignTable,
+} from './keyword-align.ts'
+
+export {
+  AlignCache,
+  loadAlignTable,
+  saveAlignTable,
+  type AlignModel,
+} from './keyword-align-store.ts'
+
+export {
+  OCR_PROMPT,
+  parseOcrText,
+  readScreenText,
+  type VisionModel,
+} from './screen-ocr.ts'
+
+export {
+  assessCollection,
+  collectKeywords,
+  suggestKeywordHints,
+  type CollectOptions,
+  type KeywordHint,
+  type PageSample,
+  type SampleNode,
+} from './keyword-collect.ts'
+
+export {
   recoverTo,
   activityMatches,
   restartToHome,

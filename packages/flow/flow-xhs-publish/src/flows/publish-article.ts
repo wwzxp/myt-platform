@@ -88,7 +88,10 @@ export function createPublishArticleFlow(input: PublishArticleInput): FlowDefini
       id: 'dismiss-try-it',
       title: '关闭「try it」引导',
       requires: ARTICLE_PAGES,
-      locate: { intent: '试试看 try it', fallback: getTryItButtonPosition },
+      // strict：命中名必须与「试试看 try it」字面相关。
+      // 实测不加时模型会选中左上角「返回」，一点就把刚打开的长文页退掉，
+      // 后续步骤全部判成「页面不对」。
+      locate: { intent: '试试看 try it', fallback: getTryItButtonPosition, strict: true },
       act: { kind: 'tap' },
       // 引导可能不出现：标记 optional，找不到也算成功。
       optional: true,

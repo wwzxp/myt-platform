@@ -341,7 +341,7 @@ export function createPublishTextFlow(input: PublishTextInput): FlowDefinition {
             id: 'done',
             title: '点「完成」收起键盘',
             requires: ['post-editor'],
-            locate: { intent: '完成', fallback: getDoneButtonPosition },
+            locate: { intent: '完成', fallback: getDoneButtonPosition, strict: true },
             act: { kind: 'tap' },
             optional: true,
             rounds: 2,

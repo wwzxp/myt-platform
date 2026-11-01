@@ -14,6 +14,11 @@ export { createPublishImageFlow, type PublishImageInput } from './flows/publish-
 export { createPublishTextFlow, type PublishTextInput } from './flows/publish-text.ts'
 export { createPublishArticleFlow, type PublishArticleInput } from './flows/publish-article.ts'
 export { xhsPublishPack } from './pack.ts'
+export {
+  collectPageKeywords,
+  type CollectPageOptions,
+  type CollectPageResult,
+} from './collect.ts'
 
 export {
   XHS_PAGES,

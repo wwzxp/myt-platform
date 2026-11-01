@@ -8,18 +8,70 @@ import type { PageSpec, RecoveryRule } from '@myt/automation'
  */
 export const XHS_PAGES: readonly PageSpec[] = [
   // 系统级弹窗优先：它盖在任何页面之上。
-  { id: 'permission', markers: ['GrantPermissionsActivity', 'permissioncontroller'] },
-  { id: 'photo-picker', markers: ['PhotoPickerUserSelectActivity', 'photopicker'] },
+  {
+    id: 'permission',
+    markers: ['GrantPermissionsActivity', 'permissioncontroller'],
+    keywords: ['允许', '拒绝', '仅在使用中允许'],
+  },
+  {
+    id: 'photo-picker',
+    markers: ['PhotoPickerUserSelectActivity', 'photopicker'],
+    keywords: ['最近项目', '所有照片'],
+  },
   // 具体业务页。
-  { id: 'post-editor', markers: ['CapaPostNotePlatformActivity', 'PostNotePlatformActivity'] },
-  { id: 'article-editor', markers: ['LongNoteEditActivity'] },
-  { id: 'review', markers: ['CapaPictureReviewV3Activity', 'PictureReviewV3Activity'] },
-  { id: 'image-editor', markers: ['ImageEditActivity'] },
-  { id: 'preview', markers: ['MaterialPreviewActivity'] },
-  { id: 'text-note', markers: ['CapaPortraitEditV2Activity', 'PortraitEditV2Activity'] },
-  { id: 'album', markers: ['CapaAlbumActivity', 'entrancev2'] },
-  { id: 'profile', markers: ['ProfileActivity', 'UserProfileActivity'] },
-  { id: 'home', markers: ['IndexActivity'] },
+  {
+    id: 'post-editor',
+    markers: ['CapaPostNotePlatformActivity', 'PostNotePlatformActivity'],
+    keywords: ['发布笔记', '添加位置', '话题'],
+  },
+  // 长文编辑页内嵌在文字编辑页里，焦点常驻旧 Activity，只能靠界面文字认出。
+  {
+    id: 'article-editor',
+    markers: ['LongNoteEditActivity'],
+    contentMarkers: ['输入标题', '一键排版'],
+    keywords: ['一键排版', '标题'],
+  },
+  {
+    id: 'review',
+    markers: ['CapaPictureReviewV3Activity', 'PictureReviewV3Activity'],
+    keywords: ['一键成片', '下一步'],
+  },
+  {
+    id: 'image-editor',
+    markers: ['ImageEditActivity'],
+    // 「文字」这类两字泛词不进词表：正文里一旦出现就会误命中。
+    keywords: ['滤镜', '贴纸', '裁切', '标记', '调节', '拼图'],
+  },
+  {
+    id: 'preview',
+    markers: ['MaterialPreviewActivity'],
+    // 纯图片页抓到 0 个文字，关键词只作辅助。
+    keywords: [],
+  },
+  {
+    id: 'text-note',
+    markers: ['CapaPortraitEditV2Activity', 'PortraitEditV2Activity'],
+    contentMarkers: ['写想法'],
+    keywords: ['写想法', '添加话题'],
+  },
+  {
+    id: 'album',
+    markers: ['CapaAlbumActivity', 'entrancev2'],
+    // 实况图/全屏图是这个页独有的，个人主页也有「草稿箱」，不能单靠它。
+    keywords: ['实况图', '全屏图', '草稿箱'],
+  },
+  {
+    id: 'profile',
+    markers: ['ProfileActivity', 'UserProfileActivity'],
+    keywords: ['笔记', '收藏', '赞过'],
+  },
+  {
+    id: 'home',
+    markers: ['IndexActivity'],
+    // 首页的 tab（推荐/RED/热点…）文字始终都在、只有选中态不同，
+    // 关键词分不开——通用工具不为此设特例，这些 tab 视为同一个页面。
+    keywords: ['关注', '发现', '同城', '市集', '搜索'],
+  },
 ]
 
 /** 小红书包名。 */

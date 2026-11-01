@@ -1,5 +1,7 @@
 import type { StepContext } from '@myt/flow'
+import { dirname } from 'node:path'
 import type { UiNode } from '@myt/device'
+import type { Point } from '../types.ts'
 import { currentPage } from '../page-guard.ts'
 import type { PageRegistry } from '../page-guard.ts'
 import { locateByModel } from '../locate-adapter.ts'
@@ -41,8 +43,13 @@ export interface GraphRuntime {
   pages: PageRegistry
   /** 兜底定位器表。 */
   locators: LocatorTable
-  /** 自定义动作。 */
-  actions?: CustomActions
+  /**
+   * 相册图片格识别器：从 UI 树里找出「可点的图片格」及其选中态。
+   *
+   * 各 App 的相册结构不同，所以由业务提供；但「选 N 张」的算法在引擎里，
+   * 保证选图这件事在图上是可见的原语，而不是黑盒动作。
+   */
+  gallery?: (root: UiNode) => GalleryImagePoint[]
   /** 自定义校验。 */
   verifiers?: CustomVerifiers
   /** 自定义测量。 */
@@ -164,12 +171,15 @@ export async function runGraph(
       // - true/false：条件分支的汇合（两条都是正常路径）
       const successPorts: PortId[] = ['out', 'success', 'done', 'true', 'false']
       const ok = enteredFrom === undefined || successPorts.includes(enteredFrom)
-      // 中止时把链路上第一个节点级原因带出来，否则只剩「经 X 端口中止」。
+      // 中止原因要同时给两件事：哪个端口中止的（定位连线），
+      // 以及链路上第一个节点级原因（定位为什么）。只给前者会把真实原因吞掉，
+      // 只给后者则看不出是从哪条分支退出的。
       const cause = trail.find((step) => step.reason !== undefined)?.reason
+      const abortedBy = `经「${enteredFrom}」端口中止`
       return {
         ok,
         trail,
-        reason: ok ? undefined : (cause ?? `经「${enteredFrom}」端口中止`),
+        reason: ok ? undefined : cause === undefined ? abortedBy : `${abortedBy}：${cause}`,
         ms: Date.now() - startedAt,
       }
     }
@@ -398,7 +408,22 @@ export async function executeNode(
     params: ctx.flowParams,
     outputs: runtime.outputs ?? new Map(),
   })
-  return executor.execute({ ctx, node, runtime, inputs })
+
+  // 节点级重试：`failure` / `mismatch` 都算失败，按 `retries` 重试。
+  // 放在这里而不是各个动作里，是为了「重试」这件事只有一种实现——
+  // 之前散落在自定义动作的 for 循环里，图上完全看不见。
+  const retries = numInput(inputs, 'retries', 0)
+  const retryGap = numInput(inputs, 'retryGap', 1)
+  let result = await executor.execute({ ctx, node, runtime, inputs })
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    if (result.port === 'success' || result.port === 'true' || result.port === 'done') break
+    if (result.port !== 'failure' && result.port !== 'mismatch') break
+    ctx.throwIfCancelled()
+    await sleepRandom(ctx, retryGap, retryGap * 2)
+    ctx.invalidateSnapshot?.()
+    result = await executor.execute({ ctx, node, runtime, inputs })
+  }
+  return result
 }
 
 /** 执行动作节点。 */
@@ -435,20 +460,6 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
 
   const settle = settleOf(inputs)
 
-  // ③ 自定义动作（不需要定位）
-  if (kind === 'custom') {
-    const name = strInput(inputs, 'actName')
-    const run = runtime.actions?.[name]
-    if (!run) return { port: 'failure', reason: `未注册自定义动作：${name}` }
-    try {
-      await run(ctx)
-    } catch (error) {
-      return { port: 'failure', reason: error instanceof Error ? error.message : String(error) }
-    }
-    if (settle) await sleepRandom(ctx, settle[0], settle[1])
-    return { port: 'success' }
-  }
-
   // ④ 不需要定位的动作
   if (kind === 'back') {
     await ctx.device.back(ctx.serial)
@@ -464,6 +475,234 @@ async function executeActionNode(input: NodeExecutorContext): Promise<NodeResult
   }
   if (kind === 'sleep') {
     await sleepRandom(ctx, numInput(inputs, 'actMin', 1), numInput(inputs, 'actMax', 1))
+    return { port: 'success' }
+  }
+
+  // 点定位器指向的元素：参数是**定位器名**（业务包注册），不是写死坐标。
+  // 这样「点发布按钮」「点保存草稿」都是原语，业务只提供「按钮在哪」。
+  if (kind === 'tapLocator') {
+    const name = strInput(inputs, 'actLocator')
+    const locator = runtime.locators[name]
+    if (!locator) return { port: 'failure', reason: `未注册定位器：${name}` }
+    const snapshot = await ctx.snapshot({ refresh: true })
+    const point = locator(snapshot.root)
+    if (!point) return { port: 'failure', reason: `定位器「${name}」在当前界面找不到目标` }
+    await tapHuman(ctx, point)
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+
+  // 点第一个命中的文字：给一组候选文案，找到哪个点哪个（全部没有则失败）。
+  if (kind === 'tapText') {
+    const texts = listInput(inputs, 'actTexts')
+    if (texts.length === 0) return { port: 'failure', reason: `动作节点「${title}」没有填要点的文字` }
+    const snapshot = await ctx.snapshot({ refresh: true })
+    const point = findTextPoint(snapshot.root, texts)
+    if (!point) return { port: 'failure', reason: `界面上没有这些文字：${texts.join('/')}` }
+    await tapHuman(ctx, point)
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+
+  // 按数量选图：数已选中的图，不够就点下一张，滚到底还差就失败。
+  // 算法留在通用引擎里，业务只给「要选几张」。
+  if (kind === 'pickImages') {
+    const target = numInput(inputs, 'actCount', 1)
+    const maxScroll = numInput(inputs, 'actMaxScroll', 10)
+    let selected = 0
+    let emptyScrolls = 0
+    for (let attempt = 0; attempt < maxScroll * 3 + 20 && selected < target; attempt += 1) {
+      ctx.throwIfCancelled()
+      const snapshot = await ctx.snapshot({ refresh: true })
+      const images = runtime.gallery?.(snapshot.root) ?? []
+      if (images.length === 0 && attempt === 0) {
+        return { port: 'failure', reason: '当前界面没有可选的图片格（业务包未提供 gallery 识别，或不在相册页）' }
+      }
+      const unselected = images.filter((img: GalleryImagePoint) => !img.selected)
+      selected = images.filter((img: GalleryImagePoint) => img.selected).length
+      if (selected >= target) break
+      if (unselected.length === 0) {
+        await swipeUp(ctx)
+        emptyScrolls += 1
+        if (emptyScrolls >= maxScroll) break
+        continue
+      }
+      for (const img of unselected) {
+        if (selected >= target) break
+        await tapHuman(ctx, img.point)
+        selected += 1
+        await sleepRandom(ctx, 0.15, 0.35)
+      }
+      emptyScrolls = 0
+    }
+    if (selected < target) {
+      return { port: 'failure', reason: `只选到 ${selected}/${target} 张` }
+    }
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+
+  // 等页面：轮询直到落在期望页面之一，超时算失败（走 failure 端口）。
+  // 比「自定义动作里 for 循环 + openUri 重试」可读：定时、期望、超时全在节点上。
+  if (kind === 'waitPage') {
+    const expect = listInput(inputs, 'actPages')
+    if (expect.length === 0) {
+      return { port: 'failure', reason: `动作节点「${title}」没有填要等的页面` }
+    }
+    const timeout = numInput(inputs, 'actTimeout', 10)
+    const deadline = Date.now() + timeout * 1000
+    let page = await currentPage(ctx, runtime.pages)
+    while (!expect.includes(page) && Date.now() < deadline) {
+      ctx.throwIfCancelled()
+      await sleepRandom(ctx, PAGE_WAIT_GAP[0], PAGE_WAIT_GAP[1])
+      page = await currentPage(ctx, runtime.pages)
+    }
+    if (!expect.includes(page)) {
+      return { port: 'failure', reason: `等了 ${timeout}s，当前页面仍是 ${page}，期望 ${expect.join('/')}` }
+    }
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+
+  // 等元素：轮询直到模型/兜底能定位到目标，超时算失败。
+  if (kind === 'waitElement') {
+    const intent = strInput(inputs, 'actLocateIntent')
+    if (!intent) return { port: 'failure', reason: `动作节点「${title}」没有填要找的元素` }
+    const fallbackName = strInput(inputs, 'actLocateFallback')
+    const timeout = numInput(inputs, 'actTimeout', 10)
+    const deadline = Date.now() + timeout * 1000
+    for (;;) {
+      const hit = await locateByModel(ctx, ctx.model, {
+        intent,
+        fallback: fallbackName ? runtime.locators[fallbackName] : undefined,
+        vision: boolInput(inputs, 'actLocateVision', true),
+        strict: boolInput(inputs, 'actLocateStrict', false),
+      })
+      if (hit.ok) break
+      if (Date.now() >= deadline) {
+        return { port: 'failure', reason: `等了 ${timeout}s 仍未出现：${intent}` }
+      }
+      ctx.throwIfCancelled()
+      await sleepRandom(ctx, PAGE_WAIT_GAP[0], PAGE_WAIT_GAP[1])
+    }
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+  // 推送文件：只填本地路径与目标目录，文件名自动沿用（面向非开发者）。
+  // 推完自动加执行权限（755）：临时目录里推上去的多半是要直接运行的工具
+  // （如 yadb），而 `adb push` 默认给 644，不加就执行不了。
+  if (kind === 'push') {
+    const src = strInput(inputs, 'actSrc')
+    if (!src) return { port: 'failure', reason: `动作节点「${title}」缺少本地路径` }
+    const destDir = strInput(inputs, 'actDestDir') || '/data/local/tmp/'
+    const localPath = resolveAdbTokens(ctx, src)
+    const dest = joinDevicePath(destDir, localPath)
+    try {
+      await ctx.device.adb(ctx.serial, ['push', localPath, dest])
+      await ctx.device.adb(ctx.serial, ['shell', 'chmod', '755', dest])
+    } catch (error) {
+      return { port: 'failure', reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+  // 安装应用：本地 APK + 应用名（应用名只用于标题/提示，不做校验）。
+  // 内部先推到临时目录再安装，用户不用关心设备路径。
+  if (kind === 'installApp') {
+    const src = strInput(inputs, 'actSrc')
+    if (!src) return { port: 'failure', reason: `动作节点「${title}」缺少本地安装包路径` }
+    const localPath = resolveAdbTokens(ctx, src)
+    const dest = joinDevicePath('/data/local/tmp/', localPath)
+    try {
+      await ctx.device.adb(ctx.serial, ['push', localPath, dest])
+      await ctx.device.adb(ctx.serial, ['shell', 'pm', 'install', '-r', '-t', dest])
+    } catch (error) {
+      return { port: 'failure', reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+  // 推送到相册：把本地图片推进手机相册，后面的选图才能选到。
+  // 路径直接填在这个节点上，不再依赖流程输入——业务用户不用理解「参数」。
+  if (kind === 'pushToGallery') {
+    const raw = strInput(inputs, 'actImages')
+    const paths = splitPaths(raw)
+    if (paths.length === 0) {
+      return {
+        port: 'failure',
+        reason: `动作节点「${title}」没有填写图片路径；要发纯文字请用「发布文字笔记」`,
+      }
+    }
+    try {
+      // 倒序推送：相册按时间排序，倒着推才能让第一张排在最前。
+      for (const localPath of [...paths].reverse()) {
+        await ctx.device.pushToGallery(ctx.serial, resolveAdbTokens(ctx, localPath))
+      }
+    } catch (error) {
+      return { port: 'failure', reason: error instanceof Error ? error.message : String(error) }
+    }
+    // 下游「选择图片」按流程输入的 imagePaths 计数，这里同步一份。
+    ;(ctx.flowParams as Record<string, string>)['imagePaths'] = paths.join(',')
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+  // 启用输入法：填「输入法名称」即可，引擎在设备已装的输入法里匹配。
+  // 设备拿不到可读显示名（`ime list -a` 的 nonLocalizedLabel 为 null），
+  // 所以按标识里的片段匹配：`adbkeyboard`、`sogou` 都能命中；
+  // 也接受完整标识（含 `/`）直接使用。
+  if (kind === 'enableIme') {
+    const raw = strInput(inputs, 'actIme')?.trim() ?? ''
+    if (!raw) return { port: 'failure', reason: `动作节点「${title}」缺少输入法名称` }
+    let ime = raw
+    try {
+      if (!raw.includes('/')) {
+        // 必须用 `ime list -a`：`-s` 只列**已启用**的，刚装上还没启用的输入法不在里面，
+        // 那样「安装应用 → 启用输入法」这条链会误报「设备上没有匹配的输入法」。
+        const listed = await ctx.device.shell(ctx.serial, 'ime list -a')
+        // 只认「以冒号结尾且含 `/`」的行——`-a` 里还有 `sourceDir=/data/…` 这类噪音。
+        const ids = listed
+          .split(/\r?\n/u)
+          .map((line) => line.trim())
+          .filter((line) => line.endsWith(':') && line.includes('/'))
+          .map((line) => line.slice(0, -1))
+        const unique = [...new Set(ids)]
+        const hits = unique.filter((id) => id.toLowerCase().includes(raw.toLowerCase()))
+        if (hits.length === 0) {
+          return {
+            port: 'failure',
+            reason: `设备上没有匹配「${raw}」的输入法。可用：${unique.join('、') || '（无）'}`,
+          }
+        }
+        if (hits.length > 1) {
+          return {
+            port: 'failure',
+            reason: `「${raw}」匹配到多个输入法，请写得更具体：${hits.join('、')}`,
+          }
+        }
+        ime = hits[0]!
+      }
+      await ctx.device.adb(ctx.serial, ['shell', 'ime', 'enable', ime])
+      await ctx.device.adb(ctx.serial, ['shell', 'ime', 'set', ime])
+    } catch (error) {
+      return { port: 'failure', reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
+    return { port: 'success' }
+  }
+  // 设备命令：参数原样交给 adb（`adb -s <serial> <args…>`）。
+  // 覆盖 `shell` 做不到的 `push`/`install`/`pull`，也不做白名单——
+  // 按约定由画布配置者自负后果。
+  if (kind === 'adb') {
+    const raw = strInput(inputs, 'actArgs')
+    if (!raw) return { port: 'failure', reason: `动作节点「${title}」缺少设备命令` }
+    const args = splitCommandArgs(resolveAdbTokens(ctx, raw))
+    if (args.length === 0) return { port: 'failure', reason: `动作节点「${title}」的设备命令为空` }
+    try {
+      await ctx.device.adb(ctx.serial, args)
+    } catch (error) {
+      return { port: 'failure', reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (settle) await sleepRandom(ctx, settle[0], settle[1])
     return { port: 'success' }
   }
   if (kind === 'swipe') {
@@ -657,6 +896,92 @@ function settleOf(inputs: Readonly<Record<string, unknown>>): [number, number] |
   return undefined
 }
 
+/**
+ * 把「设备命令」一行文本切成 adb 参数数组。
+ *
+ * 支持单/双引号包裹（路径里有空格时必须）：`push "C:/a b/x.apk" /data/local/tmp/`。
+ * 引号只用于分组，不会传给 adb。
+ */
+export function splitCommandArgs(text: string): string[] {
+  const args: string[] = []
+  let current = ''
+  let quote: '"' | "'" | undefined
+  let started = false
+
+  for (const char of text) {
+    if (quote) {
+      if (char === quote) quote = undefined
+      else current += char
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      started = true
+      continue
+    }
+    if (/\s/u.test(char)) {
+      if (started) {
+        args.push(current)
+        current = ''
+        started = false
+      }
+      continue
+    }
+    current += char
+    started = true
+  }
+  if (started) args.push(current)
+  return args
+}
+
+/**
+ * 把「图片路径」这类多值输入切成数组。
+ *
+ * 分隔符接受英文逗号、中文逗号与换行——用户从资源管理器复制多行路径是常态。
+ */
+export function splitPaths(value: string | undefined): string[] {
+  if (!value) return []
+  return value
+    .split(/[,，\n]/u)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+}
+
+/**
+ * 把本地文件路径拼到设备目录下，沿用原文件名。
+ *
+ * 设备侧统一用 `/`；本地可能是 `C:\a\b.apk` 或 `/a/b.apk`。
+ * 目录结尾有无 `/` 都兼容。
+ */
+export function joinDevicePath(destDir: string, localPath: string): string {
+  const name = localPath.split(/[/\\]/u).filter(Boolean).pop() ?? 'file'
+  const dir = destDir.replace(/\/+$/u, '')
+  return `${dir}/${name}`
+}
+
+/**
+ * 替换「设备命令」里的内置占位符，并把内置文件的相对路径解析成绝对路径。
+ *
+ * - `{{yadbPath}}` / `{{adbKeyboardApk}}`：老的占位符写法，继续兼容。
+ * - `resources/tools/…`：模板里的**可读默认值**（用户能直接改成自己的路径）。
+ *   解析基准取 `MYT_YADB_PATH` 所在目录——宿主总会设置它。
+ */
+function resolveAdbTokens(ctx: StepContext, text: string): string {
+  const apk = process.env['MYT_ADB_KEYBOARD_APK'] ?? ''
+  const yadbDir = process.env['MYT_YADB_PATH'] ? dirname(process.env['MYT_YADB_PATH']) : ''
+  // 模板里给用户看的是**可读文字**（「内置 ADB 输入法」），不是 `{{…}}` 花括号；
+  // 这里把这两句翻译成真实路径。用户把字段改成自己的路径时按字面使用。
+  const resolved = text
+    .replace(/内置\s*ADB\s*输入法/giu, apk)
+    .replace(/内置\s*yadb/giu, ctx.yadbPath ?? '')
+    // 兼容旧模板里的占位符写法。
+    .replace(/\{\{\s*yadbPath\s*\}\}/giu, ctx.yadbPath ?? '')
+    .replace(/\{\{\s*adbKeyboardApk\s*\}\}/giu, apk)
+
+  if (!yadbDir) return resolved
+  return resolved.replace(/(^|[\s"'])resources\/tools\//giu, `$1${yadbDir}/`)
+}
+
 async function executeConditionNode(input: NodeExecutorContext): Promise<NodeResult> {
   const { ctx, node, runtime, inputs } = input
   const title = node.data.title ?? node.id
@@ -698,6 +1023,27 @@ async function executeConditionNode(input: NodeExecutorContext): Promise<NodeRes
     const key = strInput(inputs, 'judgeKey')
     const value = ctx.flowParams[key]
     return { port: value !== undefined && value !== '' ? 'true' : 'false' }
+  }
+
+  // 「设备上装了某应用吗」：`pm list packages <名字>` 的输出里有没有它。
+  // 不要求写全包名，`adbkeyboard` 这种片段也能匹配（与 `pm list packages` 语义一致）。
+  if (kind === 'apkInstalled') {
+    const name = strInput(inputs, 'judgePackage')
+    if (!name) return { port: 'false', reason: `条件节点「${title}」缺少应用名` }
+    const out = await ctx.device.shell(ctx.serial, `pm list packages ${name}`)
+    return { port: out.includes(name) ? 'true' : 'false' }
+  }
+
+  // 「设备上某文件存在吗」：`ls <路径>` 不报错即存在。
+  if (kind === 'fileExists') {
+    const path = strInput(inputs, 'judgePath')
+    if (!path) return { port: 'false', reason: `条件节点「${title}」缺少文件路径` }
+    try {
+      await ctx.device.shell(ctx.serial, `ls ${path}`)
+      return { port: 'true' }
+    } catch {
+      return { port: 'false' }
+    }
   }
 
   return { port: 'false', reason: `条件节点「${title}」的判断类型「${kind}」未实现` }
@@ -855,4 +1201,48 @@ async function runtimeScreenSize(ctx: StepContext): Promise<{ width: number; hei
     : { width: 900, height: 1600 }
   screenCache.set(ctx.serial, size)
   return size
+}
+
+
+/** 相册里一个可点的图片格（由业务提供识别函数）。 */
+export interface GalleryImagePoint {
+  point: Point
+  selected: boolean
+}
+
+/** 在 UI 树里按文字找可点的位置；先精确后包含。 */
+export function findTextPoint(root: UiNode, texts: readonly string[]): Point | null {
+  let fuzzy: Point | null = null
+  const walk = (node: UiNode): Point | null => {
+    const label = `${node.text} ${node.contentDesc}`.trim()
+    if (label) {
+      for (const want of texts) {
+        if (!want) continue
+        if (label === want && node.clickable) return centerOf(node)
+        if (fuzzy === null && label.includes(want)) fuzzy = centerOf(node)
+      }
+    }
+    for (const child of node.children) {
+      const hit = walk(child)
+      if (hit) return hit
+    }
+    return null
+  }
+  return walk(root) ?? fuzzy
+}
+
+/** 节点中心点。 */
+function centerOf(node: UiNode): Point {
+  const [x1, y1, x2, y2] = node.bounds
+  return { x: Math.round((x1 + x2) / 2), y: Math.round((y1 + y2) / 2) }
+}
+
+/** 向上滑一屏的 40%（滚动列表的通用做法）。 */
+async function swipeUp(ctx: StepContext): Promise<void> {
+  const snapshot = await ctx.snapshot()
+  const [x1, y1, x2, y2] = snapshot.root.bounds
+  const cx = Math.round((x1 + x2) * 0.535)
+  const from = Math.round(y1 + (y2 - y1) * 0.75)
+  const to = Math.round(y1 + (y2 - y1) * 0.35)
+  await ctx.device.swipe(ctx.serial, { x: cx, y: from }, { x: cx, y: to }, 300)
 }

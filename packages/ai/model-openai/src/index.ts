@@ -36,6 +36,58 @@ export class OpenAiModelControl extends ModelControl {
     this.apiKey = config.apiKey
   }
 
+  /**
+   * 带图片的一次请求（多模态）。
+   *
+   * 与 `complete` 的唯一区别是 content 用 OpenAI 的数组格式：
+   * `[{type:'text'}, {type:'image_url'}]`。图片走 data URL，不依赖外部存储。
+   *
+   * @param prompt 提示词
+   * @param imageBase64 PNG 的 base64（不含 data: 前缀）
+   */
+  async completeWithImage(
+    prompt: string,
+    imageBase64: string,
+    options: CompleteOptions = {},
+  ): Promise<string> {
+    const body: Record<string, unknown> = {
+      model: this.modelName,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}` } },
+          ],
+        },
+      ],
+      temperature: options.temperature ?? 0,
+      max_tokens: options.maxTokens ?? 256,
+      reasoning_effort: 'none',
+    }
+
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    if (this.apiKey) headers.authorization = `Bearer ${this.apiKey}`
+
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.timeoutMs),
+    })
+    if (!response.ok) {
+      throw new Error(`模型请求失败：HTTP ${response.status} ${await response.text()}`)
+    }
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }> | undefined
+    }
+    const content = data.choices?.[0]?.message?.content
+    if (typeof content !== 'string') {
+      throw new Error(`模型响应缺少 content：${JSON.stringify(data).slice(0, 200)}`)
+    }
+    return content.trim()
+  }
+
   async complete(prompt: string, options: CompleteOptions = {}): Promise<string> {
     const body: Record<string, unknown> = {
       model: this.modelName,

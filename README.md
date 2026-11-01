@@ -61,10 +61,13 @@ adb devices                      # 确认是 device 状态
 ### 构建
 
 ```bash
-pnpm typecheck        # tsc --noEmit
 pnpm build:host       # tsc -b + tsdown，产物在 packages/*/lib
 pnpm dev:desktop      # 构建并启动 Electron 壳
 ```
+
+> 类型检查请用 `npx tsc -b tsconfig.host.json`（项目引用模式）。
+> 根 `package.json` 里的 `typecheck` 脚本是 dsh 基座遗留的，
+> 它跑的是通配 `tsconfig.json`，缺少 workspace 路径映射，**不适用于本仓库**。
 
 ---
 
@@ -189,9 +192,9 @@ ollama/lib/ollama/llama-server.exe \
 ## 开发
 
 ```bash
-pnpm dev:canvas       # 内核 + 画布（开发最常用）
-pnpm typecheck        # 全仓类型检查
-npx vitest run        # 测试（自动化引擎 56 个用例）
+pnpm dev:canvas                     # 内核 + 画布（开发最常用）
+npx tsc -b tsconfig.host.json       # 类型检查（项目引用模式）
+npx vitest run                      # 测试（自动化引擎 56 个用例）
 ```
 
 **改完内核代码后**：内核跑的是 `packages/*/lib/index.js`（tsdown 产物），

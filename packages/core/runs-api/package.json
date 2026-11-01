@@ -14,11 +14,12 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-host-webserver": "workspace:~",
-    "@myt/flow": "workspace:*",
-    "@myt/runs": "workspace:*",
+    "@myt/automation": "workspace:*",
     "@myt/device-adb": "workspace:*",
-    "@myt/ui-decide": "workspace:*",
-    "@myt/model": "workspace:*"
+    "@myt/flow": "workspace:*",
+    "@myt/model": "workspace:*",
+    "@myt/runs": "workspace:*",
+    "@myt/ui-decide": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.5"

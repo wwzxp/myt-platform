@@ -5,6 +5,21 @@ import { center, locate, describe, type Locator } from '@myt/locator'
 import type { ErrorKind, RunStore } from '@myt/runs'
 
 /** 单个步骤的执行上下文；步骤只通过它与外界交互。 */
+/**
+ * 页面识别的可选能力（结构性类型）。
+ *
+ * 定义在这里而不是 automation 包里，是因为依赖方向是 automation → flow，
+ * flow 不能反过来 import。两边按结构兼容即可。
+ */
+export interface PageIdentifyOptions {
+  /** 跨语言对齐表（静态表，或带 get/ensure 的缓存对象）。 */
+  align?: Record<string, string> | { get(): Record<string, string>; ensure(...args: never[]): Promise<number> } | undefined
+  /** 文本模型：自动补对齐表。 */
+  alignModel?: ((prompt: string) => Promise<string>) | undefined
+  /** 视觉模型：XML 抓不到文字时读截图。 */
+  vision?: ((prompt: string, imageBase64: string) => Promise<string>) | undefined
+}
+
 export interface StepContext {
   serial: string
   deviceId: string
@@ -40,6 +55,8 @@ export interface StepContext {
     /** 异常恢复规则表。 */
     recoveryRules: readonly unknown[]
   } | undefined
+  /** 页面识别的可选能力（对齐表 / 文本模型 / 视觉模型）；不传则只走确定性路径。 */
+  pageIdentify?: PageIdentifyOptions | undefined
   /** 若已被取消则抛错；长循环需要每轮调用。 */
   throwIfCancelled: () => void
   /** 当前快照的惰性获取：同一 step 内多次定位只抓一次。 */
@@ -281,6 +298,8 @@ export interface RunOptions {
   abortSignal?: AbortSignal | undefined
   /** 本地模型调用函数；不传则流程只能走确定性定位。 */
   model?: ((prompt: string) => Promise<string>) | undefined
+  /** 页面识别能力；不传则 `currentPage` 只用 Activity 与 contentMarkers。 */
+  pageIdentify?: PageIdentifyOptions | undefined
 }
 export interface RunResult {
   runId: string
@@ -360,6 +379,7 @@ export function createStepContext(
     humanPolicy,
     flowParams: options.params ?? {},
     model: options.model,
+    pageIdentify: options.pageIdentify,
     app: app as StepContext['app'],
     throwIfCancelled() {
       if (signal?.aborted) throw new RunCancelled('运行已取消')

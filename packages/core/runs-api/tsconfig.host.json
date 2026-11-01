@@ -12,6 +12,18 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../ai/model/tsconfig.host.json"
+    },
+    {
+      "path": "../../automation/automation/tsconfig.host.json"
+    },
+    {
+      "path": "../../automation/ui-decide/tsconfig.host.json"
+    },
+    {
+      "path": "../../device/device-adb/tsconfig.host.json"
+    },
+    {
       "path": "../../host/webserver"
     },
     {
@@ -19,15 +31,6 @@
     },
     {
       "path": "../runs/tsconfig.host.json"
-    },
-    {
-      "path": "../../device/device-adb/tsconfig.host.json"
-    },
-    {
-      "path": "../../automation/ui-decide/tsconfig.host.json"
-    },
-    {
-      "path": "../../ai/model/tsconfig.host.json"
     }
   ]
 }

@@ -107,6 +107,13 @@ export class WorkflowStore extends Service {
   private readonly dir: string | undefined
   /** 内存缓存：fileName → 文档。`dir` 为空时作为唯一存储。 */
   private readonly cache = new Map<string, WorkflowDocument>()
+  /**
+   * 每个文件的最后修改时间。
+   *
+   * 用来发现「磁盘上的文件被外部改过」（手工编辑、脚本导入、另一个进程写入）：
+   * 没有它，服务起过一次就永远返回启动时的快照，改完必须重启。
+   */
+  private readonly mtimes = new Map<string, number>()
   private loaded = false
 
   constructor(ctx: ConstructorParameters<typeof Service>[0], config: WorkflowsConfig = {}) {
@@ -149,7 +156,33 @@ export class WorkflowStore extends Service {
   async load(fileName: string): Promise<WorkflowDocument | undefined> {
     await this.ensureLoaded()
     const key = withJson(fileName)
+
+    // 文件被外部改过就重读，避免「改了必须重启服务」。
+    if (this.dir) {
+      const mtime = await this.modifiedAt(key)
+      if (this.mtimes.get(key) !== mtime) {
+        const doc = await this.readDoc(key)
+        if (doc) {
+          this.cache.set(key, doc)
+          this.mtimes.set(key, mtime)
+        } else {
+          this.cache.delete(key)
+          this.mtimes.delete(key)
+        }
+      }
+    }
     return this.cache.get(key)
+  }
+
+  /** 从磁盘读单个流程；不存在或损坏返回 `undefined`。 */
+  private async readDoc(fileName: string): Promise<WorkflowDocument | undefined> {
+    if (!this.dir) return undefined
+    try {
+      const raw = await readFile(join(this.dir, fileName), 'utf8')
+      return JSON.parse(raw) as WorkflowDocument
+    } catch {
+      return undefined
+    }
   }
 
   /** 按 id 找流程（前端路由用 id 时）。 */
@@ -285,6 +318,7 @@ export class WorkflowStore extends Service {
           edges: Array.isArray(parsed['edges']) ? parsed['edges'] : [],
         }
         this.cache.set(fileName, doc)
+        this.mtimes.set(fileName, await this.modifiedAt(fileName))
       } catch {
         // 单个文件损坏不影响其它流程
       }

@@ -1,6 +1,0 @@
-﻿=== WT 鐜娴嬭瘯 ===
-whoami: yx-20231014nvlt\administrator
-PWD: C:\Users\Administrator
-node: v22.22.2
-bash.path: C:\WINDOWS\system32\bash.exe
-uname-via-bash: Linux
